@@ -44,6 +44,11 @@ env/
 .ruff_cache
 .mypy_cache
 
+# PLAYWRIGHT OUTPUT
+/playwright-report/
+/test-results/
+/blob-report/
+
 # IDEs / EDITORS
 .vscode/
 .idea/
