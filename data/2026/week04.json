@@ -68,7 +68,7 @@
       },
       "status": "live",
       "away_score": 6,
-      "home_score": 13
+      "home_score": 20
     },
     {
       "id": "1392268",
@@ -84,7 +84,7 @@
         "name": "Cincinnati Bengals"
       },
       "status": "live",
-      "away_score": 13,
+      "away_score": 16,
       "home_score": 10
     },
     {
@@ -169,7 +169,7 @@
         "name": "Houston Texans"
       },
       "status": "live",
-      "away_score": 19,
+      "away_score": 20,
       "home_score": 23
     },
     {
