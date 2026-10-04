@@ -51,7 +51,7 @@
       },
       "status": "live",
       "away_score": 7,
-      "home_score": 0
+      "home_score": 7
     },
     {
       "id": "1392267",
@@ -68,7 +68,7 @@
       },
       "status": "live",
       "away_score": 0,
-      "home_score": 0
+      "home_score": 7
     },
     {
       "id": "1392268",
@@ -102,7 +102,7 @@
       },
       "status": "live",
       "away_score": 14,
-      "home_score": 3
+      "home_score": 6
     },
     {
       "id": "1392270",
@@ -135,7 +135,7 @@
         "name": "Tampa Bay Buccaneers"
       },
       "status": "live",
-      "away_score": 0,
+      "away_score": 7,
       "home_score": 0
     },
     {
