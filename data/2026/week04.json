@@ -50,7 +50,7 @@
         "name": "Buffalo Bills"
       },
       "status": "live",
-      "away_score": 14,
+      "away_score": 21,
       "home_score": 17
     },
     {
@@ -67,7 +67,7 @@
         "name": "Chicago Bears"
       },
       "status": "live",
-      "away_score": 3,
+      "away_score": 6,
       "home_score": 13
     },
     {
@@ -85,7 +85,7 @@
       },
       "status": "live",
       "away_score": 13,
-      "home_score": 9
+      "home_score": 10
     },
     {
       "id": "1392269",
@@ -170,7 +170,7 @@
       },
       "status": "live",
       "away_score": 13,
-      "home_score": 16
+      "home_score": 23
     },
     {
       "id": "1392274",
