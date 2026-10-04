@@ -101,7 +101,7 @@
         "name": "New York Giants"
       },
       "status": "live",
-      "away_score": 0,
+      "away_score": 7,
       "home_score": 0
     },
     {
@@ -153,7 +153,7 @@
       },
       "status": "live",
       "away_score": 0,
-      "home_score": 0
+      "home_score": 7
     },
     {
       "id": "1392273",
@@ -170,7 +170,7 @@
       },
       "status": "live",
       "away_score": 0,
-      "home_score": 0
+      "home_score": 6
     },
     {
       "id": "1392274",
