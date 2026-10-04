@@ -1,0 +1,19 @@
+{
+  "name": "pbj",
+  "version": "1.0.0",
+  "description": "PBJ Dashboard frontend test tooling.",
+  "scripts": {
+    "test": "npm run test:unit && npm run test:browser",
+    "test:unit": "node --test tests/frontend/unit/*.test.js",
+    "test:browser": "playwright test"
+  },
+  "license": "SEE LICENSE IN LICENSE-SCOPE.md",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}

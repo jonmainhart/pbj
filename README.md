@@ -99,6 +99,16 @@ announcements.
 Player cards remain compact until selected, then open to show detailed
 statistics and picks.
 
+The weekly Players/Games toggle provides two views of the same picks. Players
+is the default. Games shows each matchup and groups players by their selected
+team or N/P. Unfinished games appear first, with kickoff order preserved within
+the unfinished and final groups.
+
+Select a matchup in a player card to open its game, or select a player in a
+game card to open their picks. Closing returns to the originating card and
+restores its scroll position. A second cross-navigation starts a new root
+context rather than building a history chain.
+
 Scheduled games show their local kickoff time. Live and final games show their
 current or final score.
 
@@ -167,6 +177,19 @@ Run the quality checks:
     pytest
     mypy src tests
     ruff check .
+
+Install frontend test dependencies and Chromium:
+
+    npm ci
+    npx playwright install chromium
+
+Run frontend unit and browser tests:
+
+    node --test tests/frontend/unit/*.test.js
+    npx playwright test
+
+Browser tests start a local Python static server automatically. Automated
+browser coverage uses Chromium; mobile Safari layout is checked manually.
 
 Serve the dashboard locally:
 

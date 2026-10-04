@@ -14,10 +14,10 @@ import {
 } from "./players.js";
 
 import {
-    closeActivePlayerCard,
-    initializePlayerCardInteractions,
-    isPlayerCardOpen,
-} from "./player-card.js";
+    resetWeeklyNavigation,
+    initializeWeeklyInteractions,
+    isWeeklyCardOpen,
+} from "./weekly-controller.js";
 
 import { renderWeeklyView } from "./weekly.js";
 
@@ -33,7 +33,7 @@ let seasonData = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
     initializeTabs();
-    initializePlayerCardInteractions();
+    initializeWeeklyInteractions();
     loadAnnouncements();
 
     try {
@@ -72,7 +72,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
 async function refreshCurrentWeek() {
-  if (isPlayerCardOpen()) {
+  if (isWeeklyCardOpen()) {
     return;
   }
 
@@ -80,6 +80,14 @@ async function refreshCurrentWeek() {
 
   try {
     const data = await fetchWeek(SEASON, week);
+
+    // A card may have opened or the selected week changed while fetching.
+    if (
+      isWeeklyCardOpen()
+      || Number(document.querySelector("#week-select").value) !== week
+    ) {
+      return;
+    }
 
     if (JSON.stringify(data) === JSON.stringify(currentWeekData)) {
       return;
@@ -111,8 +119,6 @@ function initializeWeekSelector(availableWeeks) {
     select.addEventListener("change", () => {
         const week = Number(select.value);
 
-        closeActivePlayerCard();
-
         updateWeekQueryString(week);
         loadWeek(week);
     });
@@ -124,12 +130,12 @@ function initializeTabs() {
     const seasonTab = document.querySelector("#season-tab");
 
     weeklyTab.addEventListener("click", () => {
-        closeActivePlayerCard();
+        resetWeeklyNavigation();
         showView("weekly");
     });
 
     seasonTab.addEventListener("click", async () => {
-        closeActivePlayerCard();
+        resetWeeklyNavigation();
         showView("season");
 
         if (seasonData === null) {
@@ -167,7 +173,7 @@ function showView(view) {
 
 
 async function loadWeek(week) {
-    closeActivePlayerCard();
+    resetWeeklyNavigation("players");
 
     setText("#week-heading", `Week ${week}`);
     setText("#week-status", "Loading…");
@@ -177,6 +183,7 @@ async function loadWeek(week) {
     const summary = document.querySelector("#weekly-summary");
 
     playerList.replaceChildren();
+    document.querySelector("#game-list").replaceChildren();
     summary.replaceChildren();
 
     try {

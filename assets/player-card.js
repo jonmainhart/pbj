@@ -2,122 +2,83 @@
 
 let activePlayerCard = null;
 let activeCardOverlay = null;
+let onClose = () => closeActivePlayerCard(true);
 
-
-export function initializePlayerCardInteractions() {
+export function initializePlayerCardInteractions(close = onClose) {
+    onClose = close;
     document.addEventListener("keydown", (event) => {
-        if (
-            event.key === "Escape"
-            && activeCardOverlay !== null
-        ) {
-            closeActivePlayerCard(true);
+        if (!activeCardOverlay) return;
+        if (event.key === "Escape") {
+            event.preventDefault();
+            onClose();
+        } else if (event.key === "Tab") {
+            const buttons = [...activeCardOverlay.querySelectorAll("button")];
+            const first = buttons[0];
+            const last = buttons.at(-1);
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
         }
     });
 }
-
 
 export function isPlayerCardOpen() {
     return activeCardOverlay !== null;
 }
 
-
-export function openPlayerCard(sourceCard) {
-    closeActivePlayerCard();
-
-    const overlay = document.createElement("div");
-    overlay.className = "player-card-overlay";
-
-    const raisedCard = sourceCard.cloneNode(true);
-
-    raisedCard.classList.remove("is-selected");
-
-    const raisedSummary =
-        raisedCard.querySelector(".player-summary");
-
-    if (raisedSummary !== null) {
-        raisedSummary.setAttribute(
-            "aria-expanded",
-            "true",
-        );
-
-        raisedSummary.addEventListener(
-            "click",
-            (event) => {
-                event.stopPropagation();
-                closeActivePlayerCard(true);
-            },
-        );
-    }
-
-    raisedCard.addEventListener(
-        "click",
-        (event) => {
-            event.stopPropagation();
-        },
-    );
-
-    overlay.addEventListener(
-        "click",
-        () => {
-            closeActivePlayerCard();
-        },
-    );
-
-    overlay.append(raisedCard);
-    document.body.append(overlay);
-
-    activePlayerCard = sourceCard;
-    activeCardOverlay = overlay;
-
-    sourceCard.classList.add("is-selected");
-
-    const sourceSummary =
-        sourceCard.querySelector(".player-summary");
-
-    if (sourceSummary !== null) {
-        sourceSummary.setAttribute(
-            "aria-expanded",
-            "true",
-        );
-    }
-
-    document.body.classList.add("card-open");
-
-    raisedCard.scrollTop = 0;
-
-    if (raisedSummary !== null) {
-        raisedSummary.focus();
-    }
+export function getActiveCardScroll() {
+    return activeCardOverlay?.firstElementChild.scrollTop ?? 0;
 }
 
+export function openPlayerCard(sourceCard, options = {}) {
+    closeActivePlayerCard();
+    const close = options.onClose ?? onClose;
+    const overlay = document.createElement("div");
+    overlay.className = "player-card-overlay";
+    const raisedCard = sourceCard.cloneNode(true);
+    raisedCard.classList.remove("is-selected");
+    raisedCard.setAttribute("role", "dialog");
+    raisedCard.setAttribute("aria-modal", "true");
+    raisedCard.setAttribute("aria-label", sourceCard.dataset.entityKind === "game" ? "Game details" : "Player details");
+    const raisedSummary = raisedCard.querySelector(".player-summary");
+    raisedSummary.setAttribute("aria-expanded", "true");
+
+    // Delegation binds drill-down actions on the displayed clone; cloneNode
+    // deliberately does not copy event listeners from the source card.
+    raisedCard.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const target = event.target.closest("[data-target-kind]");
+        if (target) {
+            options.onNavigate?.(target.dataset.targetKind, target.dataset.targetId);
+        } else if (event.target.closest(".player-summary")) {
+            close();
+        }
+    });
+    overlay.addEventListener("click", close);
+    overlay.append(raisedCard);
+    document.body.append(overlay);
+    activePlayerCard = sourceCard;
+    activeCardOverlay = overlay;
+    sourceCard.classList.add("is-selected");
+    sourceCard.querySelector(".player-summary").setAttribute("aria-expanded", "true");
+    document.body.classList.add("card-open");
+    raisedSummary.focus({ preventScroll: true });
+    raisedCard.scrollTop = options.cardScroll ?? 0;
+}
 
 export function closeActivePlayerCard(restoreFocus = false) {
-    const sourceCard = activePlayerCard;
-
-    if (activeCardOverlay !== null) {
-        activeCardOverlay.remove();
+    activeCardOverlay?.remove();
+    if (activePlayerCard) {
+        activePlayerCard.classList.remove("is-selected");
+        const summary = activePlayerCard.querySelector(".player-summary");
+        summary.setAttribute("aria-expanded", "false");
+        if (restoreFocus) summary.focus({ preventScroll: true });
     }
-
-    if (sourceCard !== null) {
-        sourceCard.classList.remove("is-selected");
-
-        const sourceSummary =
-            sourceCard.querySelector(".player-summary");
-
-        if (sourceSummary !== null) {
-            sourceSummary.setAttribute(
-                "aria-expanded",
-                "false",
-            );
-
-            if (restoreFocus) {
-                sourceSummary.focus();
-            }
-        }
-    }
-
     activePlayerCard = null;
     activeCardOverlay = null;
-
     document.body.classList.remove("card-open");
 }
