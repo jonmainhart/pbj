@@ -101,7 +101,7 @@
         "name": "New York Giants"
       },
       "status": "live",
-      "away_score": 17,
+      "away_score": 24,
       "home_score": 19
     },
     {
@@ -152,7 +152,7 @@
         "name": "Baltimore Ravens"
       },
       "status": "live",
-      "away_score": 7,
+      "away_score": 10,
       "home_score": 24
     },
     {
@@ -169,7 +169,7 @@
         "name": "Houston Texans"
       },
       "status": "live",
-      "away_score": 13,
+      "away_score": 19,
       "home_score": 23
     },
     {
