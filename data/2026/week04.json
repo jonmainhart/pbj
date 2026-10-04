@@ -49,7 +49,7 @@
         "abbreviation": "BUF",
         "name": "Buffalo Bills"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 29,
       "home_score": 26
     },
@@ -100,9 +100,9 @@
         "abbreviation": "NYG",
         "name": "New York Giants"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 24,
-      "home_score": 30
+      "home_score": 36
     },
     {
       "id": "1392270",
@@ -118,7 +118,7 @@
         "name": "Philadelphia Eagles"
       },
       "status": "live",
-      "away_score": 17,
+      "away_score": 24,
       "home_score": 20
     },
     {
@@ -168,7 +168,7 @@
         "abbreviation": "HOU",
         "name": "Houston Texans"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 34,
       "home_score": 30
     },
