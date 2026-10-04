@@ -185,7 +185,7 @@
         "abbreviation": "MIN",
         "name": "Minnesota Vikings"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 10,
       "home_score": 15
     },
@@ -221,7 +221,7 @@
       },
       "status": "live",
       "away_score": 6,
-      "home_score": 10
+      "home_score": 17
     },
     {
       "id": "1392277",
