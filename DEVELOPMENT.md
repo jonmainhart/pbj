@@ -287,6 +287,32 @@ win counts, and `💩` for nonzero last-place-finish counts.
 
 Python scoring remains authoritative. JavaScript presents the underlying state.
 
+### Weekly Games View and Navigation
+
+Players is the default weekly presentation. Games is derived from the same
+weekly JSON without adding persisted pick data. Games are sorted by kickoff,
+with unfinished games before final games; equal kickoff times retain input order.
+
+`game-view-model.js` owns game ordering and team/N/P grouping. `pick-status.js`
+contains the shared pick-status rules extracted from the Players view, and
+`game-display.js` formats matchups and localized kickoff times for both views.
+
+`weekly-navigation.js` defines pure state transitions with at most one return
+context. `weekly-controller.js` connects those transitions to view selection,
+stable entity IDs, focus, and page/card scroll snapshots. The shared overlay in
+`player-card.js` handles both player and game cards, with delegated drill-down
+events bound to the displayed clone.
+
+A first cross-navigation saves the origin. Closing the destination restores
+that origin once. A second cross-navigation discards the old return context
+and makes the new destination a root. Explicit toggles, week changes, and
+dashboard-tab changes clear navigation context. Changing weeks starts in Players.
+
+Summary activation, Escape, and backdrop activation share the same close
+behavior. Cards use named dialogs and keep keyboard focus within the overlay.
+Refresh is suspended while either kind of card is open and retains the selected
+weekly presentation when new data is rendered.
+
 The season view is presentation-sorted by total wins, then Win %. Equal wins
 and Win % share a competition rank.
 
@@ -338,6 +364,27 @@ messages and exceptions for failures.
 
 Development follows a relaxed TDD cadence: add meaningful tests, implement the
 behavior, run the checks, and refactor while keeping the suite green.
+
+### Frontend Testing
+
+Frontend tests use Node's built-in test runner for deterministic logic and
+Playwright for browser interactions. No bundler, transpiler, or frontend
+framework is required.
+
+    npm ci
+    npx playwright install chromium
+    node --test tests/frontend/unit/*.test.js
+    npx playwright test
+
+Unit tests live in `tests/frontend/unit`; browser tests and synthetic JSON
+fixtures live in `tests/frontend/browser`. Browser tests serve the real static
+site and intercept data requests, independently of production participant data.
+Playwright starts Python's static server on `127.0.0.1:8000` and can reuse an
+existing local server outside CI.
+
+Automated browser checks use desktop Chromium, including narrow-screen functional
+checks. Mobile Safari is tested manually. Focus, scrolling, overflow, and usable
+controls matter more than pixel-perfect snapshots.
 
 ## License
 

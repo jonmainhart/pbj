@@ -94,3 +94,4 @@ yarn-error.log*
 data/raw
 assets/img/logo-full.png
 assets/img/logo-transparent-full.png
+tests/frontend/issue-38-contract.md

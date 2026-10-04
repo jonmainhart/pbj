@@ -2,12 +2,14 @@
 
 import {
     closeActivePlayerCard,
-    openPlayerCard,
 } from "./player-card.js";
 
 import { displayName } from "./players.js";
 
 import { formatAccuracy } from "./format.js";
+import { getPickStatus } from "./pick-status.js";
+import { formatGameDisplay } from "./game-display.js";
+import { renderGames } from "./games.js";
 
 export function renderWeeklyView(data, getPlayerName) {
     const results = data.results ?? null;
@@ -25,6 +27,7 @@ export function renderWeeklyView(data, getPlayerName) {
 
     renderWeeklySummary(data, getPlayerName);
     renderPlayers(players, games, results);
+    renderGames(games, players);
 }
 
 
@@ -316,6 +319,8 @@ function createPlayerCard(
 ) {
     const card = document.createElement("article");
     card.className = "player-card";
+    card.dataset.entityKind = "player";
+    card.dataset.entityId = player.id;
 
     const summary = document.createElement("button");
     summary.className = "player-summary";
@@ -384,9 +389,8 @@ function createPlayerCard(
 
     body.append(bodyInner);
 
-    summary.addEventListener("click", () => {
-        openPlayerCard(card);
-    });
+    summary.dataset.openKind = "player";
+    summary.dataset.openId = player.id;
 
     card.append(summary, body);
 
@@ -451,43 +455,6 @@ function createEliminatedDivider() {
 }
 
 
-function formatKickoffTime(scheduledTime) {
-    const kickoff = new Date(scheduledTime);
-
-    if (Number.isNaN(kickoff.getTime())) {
-        return "";
-    }
-
-    return new Intl.DateTimeFormat(
-        undefined,
-        {
-            weekday: "short",
-            hour: "numeric",
-            minute: "2-digit",
-        },
-    ).format(kickoff);
-}
-
-
-function formatGameDisplay(game) {
-    const away = game.away.abbreviation;
-    const home = game.home.abbreviation;
-
-    if (game.status === "live") {
-        return `${away} ${game.away_score} @ ${home} ${game.home_score} — Live`;
-    }
-
-    if (game.status === "final") {
-        return `${away} ${game.away_score} @ ${home} ${game.home_score} — Final`;
-    }
-
-    const kickoff = formatKickoffTime(game.scheduled_time);
-
-    return (
-        `${away} @ ${home}`
-        + (kickoff ? ` — ${kickoff}` : "")
-    );
-}
 
 
 function createPickList(player, games) {
@@ -498,7 +465,10 @@ function createPickList(player, games) {
         const row = document.createElement("div");
         row.className = "pick-row";
 
-        const gameName = document.createElement("div");
+        const gameName = document.createElement("button");
+        gameName.type = "button";
+        gameName.dataset.targetKind = "game";
+        gameName.dataset.targetId = game.id;
         gameName.className = "game-name";
 
         gameName.textContent = formatGameDisplay(game);
@@ -533,93 +503,6 @@ function createPickList(player, games) {
 }
 
 
-function getPickStatus(pick, game) {
-    if (!pick) {
-        if (game.status === "final") {
-            return {
-                icon: "❌",
-                className: "pick-wrong",
-            };
-        }
-
-        return {
-            icon: "⏳",
-            className: "pick-pending",
-        };
-    }
-
-    if (game.status === "live") {
-        const pickedAway =
-            pick === game.away.abbreviation;
-
-        const pickedScore =
-            pickedAway
-                ? game.away_score
-                : game.home_score;
-
-        const opponentScore =
-            pickedAway
-                ? game.home_score
-                : game.away_score;
-
-        if (
-            pickedScore !== null
-            && opponentScore !== null
-            && pickedScore < opponentScore
-        ) {
-            return {
-                icon: "🟡",
-                className: "pick-live-losing",
-            };
-        }
-
-        return {
-            icon: "🟢",
-            className: "pick-live",
-        };
-    }
-
-    if (game.status !== "final") {
-        return {
-            icon: "⏳",
-            className: "pick-pending",
-        };
-    }
-
-    if (
-        game.away_score === null
-        || game.home_score === null
-    ) {
-        return {
-            icon: "⏳",
-            className: "pick-pending",
-        };
-    }
-
-    if (game.away_score === game.home_score) {
-        return {
-            icon: "➖",
-            className: "pick-tie",
-        };
-    }
-
-    const winner =
-        game.away_score > game.home_score
-            ? game.away.abbreviation
-            : game.home.abbreviation;
-
-    if (pick === winner) {
-        return {
-            icon: "✅",
-            className: "pick-correct",
-        };
-    }
-
-    return {
-        icon: "❌",
-        className: "pick-wrong",
-    };
-}
 
 
 function isWeekComplete(data) {
