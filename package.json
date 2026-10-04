@@ -10,6 +10,9 @@
   "license": "SEE LICENSE IN LICENSE-SCOPE.md",
   "type": "module",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "devDependencies": {
     "@playwright/test": "^1.63.0"
   }
