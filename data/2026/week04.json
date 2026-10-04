@@ -151,8 +151,8 @@
         "abbreviation": "BAL",
         "name": "Baltimore Ravens"
       },
-      "status": "live",
-      "away_score": 16,
+      "status": "final",
+      "away_score": 18,
       "home_score": 24
     },
     {
@@ -169,7 +169,7 @@
         "name": "Houston Texans"
       },
       "status": "live",
-      "away_score": 27,
+      "away_score": 34,
       "home_score": 30
     },
     {
@@ -185,9 +185,9 @@
         "abbreviation": "MIN",
         "name": "Minnesota Vikings"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392275",
