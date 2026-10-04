@@ -66,7 +66,7 @@
         "abbreviation": "CHI",
         "name": "Chicago Bears"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 12,
       "home_score": 23
     },
@@ -85,7 +85,7 @@
       },
       "status": "live",
       "away_score": 22,
-      "home_score": 10
+      "home_score": 17
     },
     {
       "id": "1392269",
@@ -102,7 +102,7 @@
       },
       "status": "live",
       "away_score": 24,
-      "home_score": 27
+      "home_score": 30
     },
     {
       "id": "1392270",
@@ -134,7 +134,7 @@
         "abbreviation": "TB",
         "name": "Tampa Bay Buccaneers"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 17,
       "home_score": 14
     },
@@ -170,7 +170,7 @@
       },
       "status": "live",
       "away_score": 27,
-      "home_score": 23
+      "home_score": 30
     },
     {
       "id": "1392274",
