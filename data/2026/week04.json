@@ -186,7 +186,7 @@
         "name": "Minnesota Vikings"
       },
       "status": "live",
-      "away_score": 0,
+      "away_score": 3,
       "home_score": 9
     },
     {
@@ -238,7 +238,7 @@
       },
       "status": "live",
       "away_score": 3,
-      "home_score": 13
+      "home_score": 20
     },
     {
       "id": "1392278",
