@@ -202,9 +202,9 @@
         "abbreviation": "LV",
         "name": "Las Vegas Raiders"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392276",
@@ -219,9 +219,9 @@
         "abbreviation": "SF",
         "name": "San Francisco 49ers"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392277",
@@ -236,9 +236,9 @@
         "abbreviation": "SEA",
         "name": "Seattle Seahawks"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392278",
