@@ -202,7 +202,7 @@
         "abbreviation": "LV",
         "name": "Las Vegas Raiders"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 30,
       "home_score": 27
     },
@@ -236,7 +236,7 @@
         "abbreviation": "SEA",
         "name": "Seattle Seahawks"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 23,
       "home_score": 30
     },
