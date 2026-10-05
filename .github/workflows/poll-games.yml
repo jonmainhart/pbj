@@ -6,6 +6,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: poll-games
+  cancel-in-progress: false
+
 jobs:
   update-games:
     runs-on: ubuntu-latest
