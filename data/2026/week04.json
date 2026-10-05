@@ -253,9 +253,9 @@
         "abbreviation": "CAR",
         "name": "Carolina Panthers"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392279",
