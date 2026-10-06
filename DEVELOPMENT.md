@@ -219,7 +219,7 @@ Manual workflow dispatch can still be used when needed.
 
 ## Frontend
 
-The frontend consists of `index.html`, `assets/style.css`, and native JavaScript modules under `assets/`, with no frontend framework or build step.
+The frontend consists of `index.html`, `assets/style.css`, and native JavaScript modules under `assets/`, with no frontend framework or JavaScript build step. Python generates document HTML when preparing the static site.
 
 Phone usability is the primary design requirement.
 
@@ -258,13 +258,33 @@ Players is the default weekly presentation. Games is derived from the same weekl
 
 `game-view-model.js` owns game ordering and team/N/P grouping. `pick-status.js` contains the shared pick-status rules extracted from the Players view, and `game-display.js` formats matchups and localized kickoff times for both views.
 
-`weekly-navigation.js` defines pure state transitions with at most one return context. `weekly-controller.js` connects those transitions to view selection, stable entity IDs, focus, and page/card scroll snapshots. The shared overlay in `player-card.js` handles both player and game cards, with delegated drill-down events bound to the displayed clone.
+`weekly-navigation.js` defines pure state transitions with at most one return context. `weekly-controller.js` connects those transitions to view selection, stable entity IDs, focus, and page/card scroll snapshots. `player-card.js` handles player and game clones and delegated drill-down events; `foreground-card.js` owns the shared overlay, keyboard containment, and scroll locking for all foreground cards.
 
 A first cross-navigation saves the origin. Closing the destination restores that origin once. A second cross-navigation discards the old return context and makes the new destination a root. Explicit toggles, week changes, and dashboard-tab changes clear navigation context. Changing weeks starts in Players.
 
-Summary activation, Escape, and backdrop activation share the same close behavior. Cards use named dialogs and keep keyboard focus within the overlay. Refresh is suspended while either kind of card is open and retains the selected weekly presentation when new data is rendered.
+Summary activation, Escape, and backdrop activation share the same close behavior. Cards use named dialogs and keep keyboard focus within the overlay. Refresh is suspended while any foreground card is open and retains the selected weekly presentation when new data is rendered.
 
 The season view is presentation-sorted by total wins, then Win %. Equal wins and Win % share a competition rank.
+
+### Document Cards and Publishing
+
+The footer Rules control opens a scrollable card without changing dashboard navigation. `document-card.js` owns loading, errors, and document-specific dismissal; `documents.js` fetches generated HTML. Closing restores focus and page scroll. Late responses are ignored after dismissal.
+
+`scripts/generate_documents.py` renders the complete canonical `RULES.md` using CommonMark. Raw HTML is disabled. Document definitions also support escaped plain text for future documents; existing license links retain their current behavior. Generated `assets/documents/` files are ignored by Git.
+
+Before serving the repository locally, generate the documents:
+
+    python -m scripts.generate_documents
+    python -m http.server 8000 --bind 127.0.0.1
+
+Regenerate after editing `RULES.md`. To preview the production artifact instead:
+
+    python -m scripts.build_site
+    python -m http.server 8000 --bind 127.0.0.1 --directory build/site
+
+The builder replaces `build/site` with public root files, assets, dashboard JSON, and freshly generated documents. CSV imports, raw provider responses, Python source, and development files are excluded.
+
+`deploy-pages.yml` builds and publishes this artifact after relevant changes on `main`, manual dispatch, or successful production data-processing workflows. The latter handles bot commits, which do not trigger another push workflow. Processing runs without a new commit skip publication. Configure the repository's **Settings → Pages → Source** as **GitHub Actions** before using this deployment workflow. Manual deployment also builds `main`.
 
 ## Announcements
 
@@ -279,7 +299,7 @@ Empty files remain hidden. Existing line breaks are preserved.
 
 Install or reinstall the project and development dependencies with:
 
-    python -m pip install ".[dev]"
+    python -m pip install ".[dev,docs]"
 
 The project uses a `src/` layout and a non-editable install. Reinstall after source changes when testing the installed package.
 
@@ -321,6 +341,8 @@ Frontend tests use Node's built-in test runner for deterministic logic and Playw
     npx playwright test
 
 Unit tests live in `tests/frontend/unit`; browser tests and synthetic JSON fixtures live in `tests/frontend/browser`. Browser tests serve the real static site and intercept data requests, independently of production participant data. Playwright starts Python's static server on `127.0.0.1:8000` and can reuse an existing local server outside CI.
+
+Playwright's global setup regenerates document assets before every run, including when reusing a server. It uses `.venv/bin/python` when present, otherwise `python3`; set `PBJ_PYTHON` to select another interpreter with the document dependencies installed. Most document interactions use synthetic HTML, with one browser test loading the real generated Rules asset.
 
 Automated browser checks use desktop Chromium, including narrow-screen functional checks. Mobile Safari is tested manually. Focus, scrolling, overflow, and usable controls matter more than pixel-perfect snapshots.
 

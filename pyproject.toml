@@ -12,6 +12,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+docs = [
+    "markdown-it-py>=3,<5",
+]
 dev = [
     "mypy>=1.17,<2",
     "pytest>=8,<9",

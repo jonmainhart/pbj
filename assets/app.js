@@ -1,6 +1,8 @@
 "use strict";
 
 import { loadAnnouncements } from "./announcements.js";
+import { initializeDocumentCards } from "./document-card.js";
+import { isForegroundCardOpen } from "./foreground-card.js";
 
 import {
     fetchAvailableWeeks,
@@ -16,7 +18,6 @@ import {
 import {
     resetWeeklyNavigation,
     initializeWeeklyInteractions,
-    isWeeklyCardOpen,
 } from "./weekly-controller.js";
 
 import { renderWeeklyView } from "./weekly.js";
@@ -34,6 +35,7 @@ let seasonData = null;
 document.addEventListener("DOMContentLoaded", async () => {
     initializeTabs();
     initializeWeeklyInteractions();
+    initializeDocumentCards();
     loadAnnouncements();
 
     try {
@@ -72,7 +74,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
 async function refreshCurrentWeek() {
-  if (isWeeklyCardOpen()) {
+  if (isForegroundCardOpen()) {
     return;
   }
 
@@ -83,7 +85,7 @@ async function refreshCurrentWeek() {
 
     // A card may have opened or the selected week changed while fetching.
     if (
-      isWeeklyCardOpen()
+      isForegroundCardOpen()
       || Number(document.querySelector("#week-select").value) !== week
     ) {
       return;

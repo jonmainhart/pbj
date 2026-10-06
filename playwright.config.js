@@ -3,6 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 const baseURL = "http://127.0.0.1:8000";
 
 export default defineConfig({
+    globalSetup: "./tests/frontend/browser/global-setup.js",
     testDir: "./tests/frontend/browser",
     fullyParallel: true,
     forbidOnly: Boolean(process.env.CI),

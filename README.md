@@ -32,6 +32,9 @@ See [Pool Rules](RULES.md) for:
 
 `RULES.md` is the source of truth for pool rules displayed by the dashboard.
 
+The dashboard's footer includes a Rules control that opens the complete rules
+without leaving the current view.
+
 ## Dashboard
 
 The public site provides weekly and season views, game progress, player picks, weekly winners, tiebreaker results, season statistics, and announcements.
