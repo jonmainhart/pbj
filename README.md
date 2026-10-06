@@ -29,6 +29,11 @@ Routine production processing is automated with GitHub Actions.
 
 ## Pool Rules
 
+### Weekly Picks and Scoring
+
+Each week, players pick the winner of every NFL game and provide a tiebreaker
+prediction for the combined score of the Monday night game or games.
+
 Only final games affect player statistics.
 
 - A correct pick is a win.
@@ -45,24 +50,53 @@ are included normally.
 
 ### Weekly Ranking and Winner
 
-Weekly standings are ranked by:
+Weekly standings become official only after every game for the week is final.
+They are ranked by:
 
 1. Most wins.
 2. Closest Monday night tiebreaker prediction.
+
+A player's tiebreaker distance is the absolute difference between their
+prediction and the final Monday total. If multiple Monday games are played,
+their final scores are combined into one Monday total.
 
 Competition ranking is used. Players with identical wins and tiebreaker
 distance share a rank, and the following rank skips the occupied positions.
 For example: `1, 2, 2, 4`.
 
-The weekly winner is the player ranked first. If multiple players remain tied
-for first, the weekly win is split between them.
+Every player ranked first is a weekly winner. If multiple players remain tied
+for first, the weekly win is split between them. Each player in a split receives
+one weekly win for season tracking.
 
-If multiple Monday games are played, their final scores are combined into one
-Monday total.
+Every player sharing the lowest final weekly rank receives a last-place finish.
 
-Each player in a split receives one weekly win for season tracking.
+### Season Ranking
 
-Rankings and winners are not declared until every game for the week is final.
+Season standings use results from completed weeks and are ranked by:
+
+1. Total wins.
+2. Win %.
+
+Players with identical wins and Win % share a competition rank. No additional
+statistic breaks a season ranking tie.
+
+Weekly wins and last-place finishes are tracked as season statistics but do not
+affect season ranking.
+
+### Elimination
+
+During an incomplete week, a player remains in contention if any possible
+combination of winners in the unfinished games allows that player to finish
+tied for the most wins. A player is mathematically eliminated only when no such
+combination remains.
+
+Elimination is based on current wins, the unfinished games, and each player's
+remaining picks. The Monday night tiebreaker is not used to eliminate a player
+early; reaching a tie for the most wins is enough to remain in contention.
+
+Elimination is informational only. It does not change scoring, official
+rankings, or tiebreaker calculations. Once every game is final, the completed
+weekly ranking is authoritative.
 
 ## Season Statistics
 
@@ -76,13 +110,6 @@ PBJ Dashboard tracks:
 - Win %
 - Weekly wins
 - Last-place finishes
-
-A last-place finish is recorded for each player sharing the lowest final
-weekly rank.
-
-Season standings are ranked by total wins, then Win %. Players with identical
-wins and Win % share a competition rank. No additional statistic breaks a tie
-after wins and Win %.
 
 Season statistics are rebuilt from completed weekly results, allowing
 corrections to earlier weeks to propagate cleanly.
@@ -112,10 +139,8 @@ context rather than building a history chain.
 Scheduled games show their local kickoff time. Live and final games show their
 current or final score.
 
-During an incomplete week, players still mathematically able to finish tied for
-the most wins are shown ahead of eliminated players. Contention is derived from
-the remaining games and player picks. Eliminated players are separated by an
-`ELIMINATED` divider.
+During an incomplete week, players still in contention are shown ahead of
+eliminated players, separated by an `ELIMINATED` divider.
 
 Pick indicators include:
 
