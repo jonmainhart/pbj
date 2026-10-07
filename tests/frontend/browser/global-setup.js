@@ -9,6 +9,6 @@ export default function prepareDocuments() {
     });
     if (result.error) throw result.error;
     if (result.status !== 0) {
-        throw new Error("Document generation failed. Install Python dependencies with .[dev,docs].");
+        throw new Error("Document generation failed. Install Python dependencies with .[dev].");
     }
 }

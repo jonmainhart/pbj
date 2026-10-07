@@ -284,7 +284,7 @@ Regenerate after editing `RULES.md`. To preview the production artifact instead:
 
 The builder replaces `build/site` with public root files, assets, dashboard JSON, and freshly generated documents. CSV imports, raw provider responses, Python source, and development files are excluded.
 
-`deploy-pages.yml` builds and publishes this artifact after relevant changes on `main`, manual dispatch, or successful production data-processing workflows. The latter handles bot commits, which do not trigger another push workflow. Processing runs without a new commit skip publication. Configure the repository's **Settings → Pages → Source** as **GitHub Actions** before using this deployment workflow. Manual deployment also builds `main`.
+`deploy-pages.yml` builds and publishes this artifact after relevant changes on `main`, manual dispatch, or successful production data-processing workflows. The latter handles bot commits, which do not trigger another push workflow. Processing runs without a new commit skip publication. Pending runs queue so no-op processing runs cannot replace pending production deployments; running deployments are not canceled. Configure the repository's **Settings → Pages → Source** as **GitHub Actions** before using this deployment workflow. Manual deployment also builds `main`.
 
 ## Announcements
 
@@ -299,7 +299,7 @@ Empty files remain hidden. Existing line breaks are preserved.
 
 Install or reinstall the project and development dependencies with:
 
-    python -m pip install ".[dev,docs]"
+    python -m pip install ".[dev]"
 
 The project uses a `src/` layout and a non-editable install. Reinstall after source changes when testing the installed package.
 
