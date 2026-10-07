@@ -18,19 +18,17 @@ export async function openDocumentCard({ title, url }, trigger) {
     card.className = "player-card document-card";
     const header = document.createElement("header");
     header.className = "document-card-header";
-    const heading = document.createElement("h2");
-    heading.textContent = title;
     const close = document.createElement("button");
     close.type = "button";
     close.className = "document-close";
-    close.textContent = "Close";
+    close.setAttribute("aria-label", "Close");
     const dismiss = () => {
         closeForegroundCard();
         window.scrollTo(0, pageScroll);
         trigger.focus({ preventScroll: true });
     };
     close.addEventListener("click", dismiss);
-    header.append(heading, close);
+    header.append(close);
     const content = document.createElement("div");
     content.className = "document-content";
     content.setAttribute("aria-live", "polite");
@@ -44,6 +42,10 @@ export async function openDocumentCard({ title, url }, trigger) {
         if (!card.isConnected) return;
         // Assets are generated from trusted repository documents, not user input.
         content.innerHTML = html;
+        const documentTitle = content.firstElementChild;
+        if (documentTitle?.tagName === "H1") {
+            header.prepend(documentTitle);
+        }
     } catch {
         if (!card.isConnected) return;
         content.setAttribute("role", "alert");

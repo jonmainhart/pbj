@@ -78,26 +78,23 @@ body.card-open {
   z-index: 2;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 1rem;
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
 
-.document-card-header h2 {
-  margin: 0;
-  font-size: 1.15rem;
-}
-
 .document-close {
   flex-shrink: 0;
-  min-height: 44px;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-muted);
-  color: var(--text);
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
   cursor: pointer;
 }
 
@@ -106,9 +103,17 @@ body.card-open {
   overflow-wrap: anywhere;
 }
 
+.document-card-header h1,
 .document-content h1 {
   color: var(--text);
   font-size: 1.4rem;
+}
+
+.document-card-header h1 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  line-height: 1.2;
 }
 
 .document-content h2 {
@@ -532,7 +537,8 @@ h1 {
   cursor: pointer;
 }
 
-.player-summary::after {
+.player-summary::after,
+.document-close::after {
   content: "+";
 
   width: 1.8rem;
@@ -664,7 +670,8 @@ h1 {
   -webkit-backdrop-filter: blur(8px);
 }
 
-.player-card-overlay .player-summary::after {
+.player-card-overlay .player-summary::after,
+.document-close::after {
   content: "×";
 
   background: var(--surface-muted);
