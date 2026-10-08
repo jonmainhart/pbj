@@ -1,11 +1,12 @@
-"""Contracts for rendering complete canonical project documents."""
+"""Contracts for rendering complete project documents."""
 
 import re
 from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
-from scripts.generate_documents import Document, generate_documents, render_document
+
+from scripts.generate_documents import DOCUMENTS, Document, generate_documents, render_document
 
 
 class ParsedHTML(HTMLParser):
@@ -25,6 +26,38 @@ class ParsedHTML(HTMLParser):
 
     def handle_data(self, data: str) -> None:
         self.text.append(data)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("source_name", "asset_name"),
+    [("LICENSE", "license.html"), ("LICENSE-SCOPE.md", "license-scope.html")],
+)
+def test_registered_license_documents_render_complete_canonical_sources(
+    tmp_path: Path,
+    source_name: str,
+    asset_name: str,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = (root / source_name).read_bytes()
+
+    generate_documents(root, tmp_path, DOCUMENTS)
+
+    asset = tmp_path / asset_name
+    assert asset.is_file(), f"Missing generated presentation for {source_name}"
+    parsed = ParsedHTML(asset.read_text(encoding="utf-8"))
+    text = "".join(parsed.text)
+    if source_name == "LICENSE":
+        assert parsed.tags == ["pre"]
+        assert text == source.decode("utf-8")
+    else:
+        assert {"h1", "h2", "p", "a"} <= set(parsed.tags)
+        for paragraph in source.decode("utf-8").split("\n\n"):
+            # Strip only the formatting used by this document.
+            expected = re.sub(r"\[([^]]+)\]\([^)]+\)", r"\1", paragraph)
+            expected = re.sub(r"^#{1,6} ", "", expected).replace("`", "")
+            assert " ".join(expected.split()) in " ".join(text.split())
+    assert (root / source_name).read_bytes() == source
 
 
 @pytest.mark.unit
