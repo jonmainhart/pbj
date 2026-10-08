@@ -46,8 +46,16 @@ test("footer Rules opens a formatted document without navigating away", async ({
     await expect(dialog(page).locator("code")).toHaveText("inline code");
     await expect(page).toHaveURL(url);
     await expect(page.getByRole("dialog")).toHaveCount(1);
-    // License controls remain the existing links until issue #41.
-    await expect(page.getByRole("link", { name: "Apache 2.0", exact: true })).toHaveAttribute("href", "/LICENSE");
+});
+
+test("headingless documents use the configured title in the sticky header", async ({ page }) => {
+    await setup(page, "<pre>A headingless trusted document.</pre>");
+    await rules(page).click();
+    await expect(dialog(page).locator(".document-content pre")).toHaveText("A headingless trusted document.");
+    await expect(dialog(page).locator(".document-card-header").getByRole("heading", {
+        name: "Pool Rules", exact: true,
+    })).toBeVisible();
+    await expect(dialog(page).getByRole("heading")).toHaveCount(1);
 });
 
 for (const method of ["close button", "Escape", "backdrop"]) {

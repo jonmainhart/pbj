@@ -1,11 +1,12 @@
-"""Contracts for rendering complete canonical project documents."""
+"""Contracts for rendering complete project documents."""
 
 import re
 from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
-from scripts.generate_documents import Document, generate_documents, render_document
+
+from scripts.generate_documents import DOCUMENTS, Document, generate_documents, render_document
 
 
 class ParsedHTML(HTMLParser):
@@ -16,15 +17,64 @@ class ParsedHTML(HTMLParser):
         self.tags: list[str] = []
         self.text: list[str] = []
         self.links: list[str] = []
+        self.paragraphs: list[str] = []
+        self._paragraph: list[str] | None = None
         self.feed(content)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.tags.append(tag)
+        if tag == "p":
+            self._paragraph = []
         if tag == "a":
             self.links.extend(value for name, value in attrs if name == "href" and value)
 
     def handle_data(self, data: str) -> None:
         self.text.append(data)
+        if self._paragraph is not None:
+            self._paragraph.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "p" and self._paragraph is not None:
+            self.paragraphs.append("".join(self._paragraph))
+            self._paragraph = None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("source_name", "asset_name"),
+    [("LICENSE", "license.html"), ("LICENSE-SCOPE.md", "license-scope.html")],
+)
+def test_registered_license_documents_render_complete_canonical_sources(
+    tmp_path: Path,
+    source_name: str,
+    asset_name: str,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = (root / source_name).read_bytes()
+
+    generate_documents(root, tmp_path, DOCUMENTS)
+
+    asset = tmp_path / asset_name
+    assert asset.is_file(), f"Missing generated presentation for {source_name}"
+    parsed = ParsedHTML(asset.read_text(encoding="utf-8"))
+    text = "".join(parsed.text)
+    if source_name == "LICENSE":
+        assert set(parsed.tags) == {"p"}
+        expected_paragraphs = [
+            " ".join(paragraph.split())
+            for paragraph in re.split(r"\n\s*\n", source.decode("utf-8").strip())
+        ]
+        assert [
+            " ".join(paragraph.split()) for paragraph in parsed.paragraphs
+        ] == expected_paragraphs
+    else:
+        assert {"h1", "h2", "p", "a"} <= set(parsed.tags)
+        for paragraph in source.decode("utf-8").split("\n\n"):
+            # Strip only the formatting used by this document.
+            expected = re.sub(r"\[([^]]+)\]\([^)]+\)", r"\1", paragraph)
+            expected = re.sub(r"^#{1,6} ", "", expected).replace("`", "")
+            assert " ".join(expected.split()) in " ".join(text.split())
+    assert (root / source_name).read_bytes() == source
 
 
 @pytest.mark.unit
@@ -51,13 +101,26 @@ def test_markdown_renders_the_entire_document_with_semantic_formatting() -> None
 
 
 @pytest.mark.unit
-def test_plain_text_is_escaped_and_preserves_whitespace() -> None:
-    source = 'License <terms> & "conditions"\n\n    Indented text\n'
+@pytest.mark.parametrize("newline", ["\n", "\r\n"])
+def test_plain_text_is_escaped_and_reflows_lines_within_paragraphs(newline: str) -> None:
+    source = newline.join(
+        [
+            '  License <terms> & "conditions"',
+            '    continue with <script>alert("test")</script>.',
+            "",
+            "   ",
+            "    Second paragraph with **literal** markup.",
+            "    More text.",
+            "",
+        ]
+    )
     parsed = ParsedHTML(render_document(source, "text"))
 
-    assert "pre" in parsed.tags
-    assert "terms" not in parsed.tags
-    assert "".join(parsed.text) == source
+    assert parsed.tags == ["p", "p"]
+    assert [" ".join(paragraph.split()) for paragraph in parsed.paragraphs] == [
+        'License <terms> & "conditions" continue with <script>alert("test")</script>.',
+        "Second paragraph with **literal** markup. More text.",
+    ]
 
 
 @pytest.mark.unit
@@ -80,7 +143,7 @@ def test_generation_supports_multiple_documents_without_modifying_sources(tmp_pa
 
     assert {path.name for path in output.iterdir()} == {"rules.html", "license.html"}
     assert "Entire rules." in "".join(ParsedHTML((output / "rules.html").read_text()).text)
-    assert "".join(ParsedHTML((output / "license.html").read_text()).text) == sources["LICENSE"]
+    assert ParsedHTML((output / "license.html").read_text()).paragraphs == ["Terms <reserved>"]
     for name, content in sources.items():
         assert (source_root / name).read_text(encoding="utf-8") == content
 

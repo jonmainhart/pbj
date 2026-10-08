@@ -268,21 +268,29 @@ The season view is presentation-sorted by total wins, then Win %. Equal wins and
 
 ### Document Cards and Publishing
 
-The footer Rules control opens a scrollable card without changing dashboard navigation. `document-card.js` owns loading, errors, and document-specific dismissal; `documents.js` fetches generated HTML. Closing restores focus and page scroll. Late responses are ignored after dismissal.
+The footer Rules, Apache 2.0, and Data & artwork terms controls open scrollable document cards without changing dashboard navigation. `document-card.js` owns loading, errors, and document-specific dismissal; `documents.js` fetches generated HTML. All document cards use the shared foreground-card behavior, including Close, backdrop dismissal, and Escape. Closing restores trigger focus and page scroll while retaining the current dashboard view and selected week. Late responses are ignored after dismissal.
 
-`scripts/generate_documents.py` renders the complete canonical `RULES.md` using CommonMark. Raw HTML is disabled. Document definitions also support escaped plain text for future documents; existing license links retain their current behavior. Generated `assets/documents/` files are ignored by Git.
+`scripts/generate_documents.py` generates dashboard presentation from the complete repository source documents:
+
+- `RULES.md` → `assets/documents/rules.html`, rendered using CommonMark.
+- `LICENSE` → `assets/documents/license.html`, rendered as escaped plain-text paragraphs.
+- `LICENSE-SCOPE.md` → `assets/documents/license-scope.html`, rendered using CommonMark.
+
+Raw HTML is disabled for Markdown sources. Plain-text rendering preserves wording and paragraph boundaries, joining source lines within each paragraph so the browser wraps text naturally at the available width. Keep `LICENSE` as extensionless plain text. Edit the source documents rather than maintaining presentation copies; generated `assets/documents/` files are ignored by Git.
+
+The sticky card header uses a document's opening `<h1>` when present, otherwise its configured title. The header keeps Close usable while long documents scroll.
 
 Before serving the repository locally, generate the documents:
 
     python -m scripts.generate_documents
     python -m http.server 8000 --bind 127.0.0.1
 
-Regenerate after editing `RULES.md`. To preview the production artifact instead:
+Regenerate after editing `RULES.md`, `LICENSE`, or `LICENSE-SCOPE.md`. To preview the production artifact instead:
 
     python -m scripts.build_site
     python -m http.server 8000 --bind 127.0.0.1 --directory build/site
 
-The builder replaces `build/site` with public root files, assets, dashboard JSON, and freshly generated documents. CSV imports, raw provider responses, Python source, and development files are excluded.
+The builder replaces `build/site` with public root files, assets, dashboard JSON, and freshly generated documents. The original `LICENSE` and `LICENSE-SCOPE.md` files remain directly available in the published artifact. CSV imports, raw provider responses, Python source, and development files are excluded. The normal deployment rebuilds document presentation after source edits.
 
 `deploy-pages.yml` builds and publishes this artifact after relevant changes on `main`, manual dispatch, or successful production data-processing workflows. The latter handles bot commits, which do not trigger another push workflow. Processing runs without a new commit skip publication. Pending runs queue so no-op processing runs cannot replace pending production deployments; running deployments are not canceled. Configure the repository's **Settings → Pages → Source** as **GitHub Actions** before using this deployment workflow. Manual deployment also builds `main`.
 
@@ -342,7 +350,7 @@ Frontend tests use Node's built-in test runner for deterministic logic and Playw
 
 Unit tests live in `tests/frontend/unit`; browser tests and synthetic JSON fixtures live in `tests/frontend/browser`. Browser tests serve the real static site and intercept data requests, independently of production participant data. Playwright starts Python's static server on `127.0.0.1:8000` and can reuse an existing local server outside CI.
 
-Playwright's global setup regenerates document assets before every run, including when reusing a server. It uses `.venv/bin/python` when present, otherwise `python3`; set `PBJ_PYTHON` to select another interpreter with the document dependencies installed. Most document interactions use synthetic HTML, with one browser test loading the real generated Rules asset.
+Playwright's global setup regenerates document assets before every run, including when reusing a server. It uses `.venv/bin/python` when present, otherwise `python3`; set `PBJ_PYTHON` to select another interpreter with the document dependencies installed. Shared document behavior is tested with synthetic HTML, and browser tests also load the real generated Rules, license, and scope assets. License checks cover complete paragraph content, natural wrapping, phone and desktop scrolling, horizontal overflow, usable Close controls, and restoration of trigger focus and dashboard state. Python tests cover escaping, paragraph boundaries, and regeneration from source documents while preserving the original files in the published artifact.
 
 Automated browser checks use desktop Chromium, including narrow-screen functional checks. Mobile Safari is tested manually. Focus, scrolling, overflow, and usable controls matter more than pixel-perfect snapshots.
 

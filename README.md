@@ -67,3 +67,6 @@ PBJ Dashboard source code and project documentation are licensed under the Apach
 Pool participant data and PBJ artwork and branding are excluded from that license. Third-party sports data, team identifiers, trademarks, and other third-party material remain subject to their respective rights.
 
 See [LICENSE](LICENSE) and [LICENSE-SCOPE.md](LICENSE-SCOPE.md) for details.
+
+The dashboard footer opens the Apache 2.0 license and Data & artwork terms
+without leaving the current view.
