@@ -4,6 +4,8 @@ import { openForegroundCard, closeForegroundCard } from "./foreground-card.js";
 export function initializeDocumentCards() {
     const definitions = {
         rules: { title: "Pool Rules", url: "./assets/documents/rules.html" },
+        license: { title: "Apache 2.0", url: "./assets/documents/license.html" },
+        "license-scope": { title: "Data & artwork terms", url: "./assets/documents/license-scope.html" },
     };
     document.querySelectorAll("[data-document]").forEach((trigger) => {
         trigger.addEventListener("click", () => {
@@ -18,6 +20,8 @@ export async function openDocumentCard({ title, url }, trigger) {
     card.className = "player-card document-card";
     const header = document.createElement("header");
     header.className = "document-card-header";
+    const heading = document.createElement("h1");
+    heading.textContent = title;
     const close = document.createElement("button");
     close.type = "button";
     close.className = "document-close";
@@ -28,7 +32,7 @@ export async function openDocumentCard({ title, url }, trigger) {
         trigger.focus({ preventScroll: true });
     };
     close.addEventListener("click", dismiss);
-    header.append(close);
+    header.append(heading, close);
     const content = document.createElement("div");
     content.className = "document-content";
     content.setAttribute("aria-live", "polite");
@@ -44,7 +48,7 @@ export async function openDocumentCard({ title, url }, trigger) {
         content.innerHTML = html;
         const documentTitle = content.firstElementChild;
         if (documentTitle?.tagName === "H1") {
-            header.prepend(documentTitle);
+            heading.replaceWith(documentTitle);
         }
     } catch {
         if (!card.isConnected) return;

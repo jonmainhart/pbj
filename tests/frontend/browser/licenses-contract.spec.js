@@ -7,6 +7,8 @@ const documents = [
     { control: "Data & artwork terms", source: "LICENSE-SCOPE.md", asset: "license-scope.html" },
 ];
 const sourceText = (name) => readFileSync(new URL(`../../../${name}`, import.meta.url), "utf8");
+const licenseParagraphs = () => sourceText("LICENSE").trim().split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim().replace(/\s+/g, " "));
 const trigger = (page, name) => page.getByRole("contentinfo").getByRole("button", { name, exact: true });
 const dialog = (page) => page.getByRole("dialog");
 const close = (page) => dialog(page).getByRole("button", { name: "Close", exact: true });
@@ -37,8 +39,9 @@ for (const document of documents) {
         await expect(close(page)).toBeFocused();
         const source = sourceText(document.source);
         if (document.source === "LICENSE") {
-            // Compare exact text, including indentation and every section of the license.
-            await expect.poll(() => dialog(page).locator("pre").textContent()).toBe(source);
+            // Every paragraph remains complete and in order, with source line wraps reflowed.
+            await expect(dialog(page).locator(".document-content p")).toHaveText(licenseParagraphs());
+            await expect(dialog(page).locator("pre")).toHaveCount(0);
             await expect(dialog(page).locator(".document-card-header").getByRole("heading", {
                 name: /Apache.*2\.0/i,
             })).toBeVisible();
@@ -89,7 +92,11 @@ for (const viewport of [{ width: 390, height: 700 }, { width: 1280, height: 800 
         await setup(page);
         await expect(trigger(page, "Apache 2.0")).toBeVisible();
         await trigger(page, "Apache 2.0").click();
-        await expect.poll(() => dialog(page).locator("pre").textContent()).toBe(sourceText("LICENSE"));
+        const paragraphs = dialog(page).locator(".document-content p");
+        await expect(paragraphs).toHaveText(licenseParagraphs());
+        await expect.poll(() => paragraphs.evaluateAll((elements) => elements.every((element) =>
+            getComputedStyle(element).whiteSpace === "normal",
+        ))).toBe(true);
         const card = dialog(page);
         await expect.poll(() => card.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
         await card.evaluate((element) => { element.scrollTop = element.scrollHeight; });

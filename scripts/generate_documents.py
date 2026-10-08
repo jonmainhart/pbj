@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from html import escape
@@ -23,17 +24,24 @@ class Document:
     format: str
 
 
-DOCUMENTS = (Document(name="rules", source="RULES.md", format="markdown"),)
+DOCUMENTS = (
+    Document(name="rules", source="RULES.md", format="markdown"),
+    Document(name="license", source="LICENSE", format="text"),
+    Document(name="license-scope", source="LICENSE-SCOPE.md", format="markdown"),
+)
 
 
 def render_document(content: str, format: str) -> str:
-    """Render a whole Markdown document or escaped, whitespace-preserving text."""
+    """Render a whole Markdown document or escaped plain-text paragraphs."""
     if not content.strip():
         raise ValueError("Document is empty")
     if format == "markdown":
         return cast(str, MarkdownIt("commonmark", {"html": False}).render(content))
     if format == "text":
-        return f"<pre>{escape(content)}</pre>"
+        paragraphs = re.split(r"\n\s*\n", content.strip())
+        return "\n".join(
+            f"<p>{escape(' '.join(paragraph.split()))}</p>" for paragraph in paragraphs
+        )
     raise ValueError(f"Unsupported document format: {format}")
 
 
