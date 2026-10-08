@@ -62,6 +62,79 @@ body.card-open {
   overflow: hidden;
 }
 
+.footer-link {
+  padding: 0.5rem 0.25rem;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.document-card-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.document-close {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.document-content {
+  padding: 0.25rem 1rem 1rem;
+  overflow-wrap: anywhere;
+}
+
+.document-card-header h1,
+.document-content h1 {
+  color: var(--text);
+  font-size: 1.4rem;
+}
+
+.document-card-header h1 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.document-content h2 {
+  font-size: 1.15rem;
+  margin-top: 1.5rem;
+}
+
+.document-content li + li {
+  margin-top: 0.35rem;
+}
+
+.document-content a {
+  color: var(--accent-dark);
+}
+
+.document-content pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+
 [hidden] {
   display: none !important;
 }
@@ -464,7 +537,8 @@ h1 {
   cursor: pointer;
 }
 
-.player-summary::after {
+.player-summary::after,
+.document-close::after {
   content: "+";
 
   width: 1.8rem;
@@ -596,7 +670,8 @@ h1 {
   -webkit-backdrop-filter: blur(8px);
 }
 
-.player-card-overlay .player-summary::after {
+.player-card-overlay .player-summary::after,
+.document-close::after {
   content: "×";
 
   background: var(--surface-muted);
