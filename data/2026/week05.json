@@ -1227,8 +1227,8 @@
       "tiebreaker": 45.0
     },
     {
-      "id": "steffany",
-      "name": "Steffany",
+      "id": "steff",
+      "name": "Steff",
       "nickname": null,
       "picks": {
         "1392280": "TB",
@@ -1787,7 +1787,7 @@
         "weekly_winner": false
       },
       {
-        "player_id": "steffany",
+        "player_id": "steff",
         "wins": 1,
         "losses": 0,
         "ties": 0,
