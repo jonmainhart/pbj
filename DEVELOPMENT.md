@@ -268,13 +268,14 @@ The season view is presentation-sorted by total wins, then Win %. Equal wins and
 
 ### Document Cards and Publishing
 
-The footer Rules, Apache 2.0, and Data & artwork terms controls open scrollable document cards without changing dashboard navigation. `document-card.js` owns loading, errors, and document-specific dismissal; `documents.js` fetches generated HTML. All document cards use the shared foreground-card behavior, including Close, backdrop dismissal, and Escape. Closing restores trigger focus and page scroll while retaining the current dashboard view and selected week. Late responses are ignored after dismissal.
+The footer Rules, Apache 2.0, Data & artwork terms, and Legal Notice controls open scrollable document cards without changing dashboard navigation. `document-card.js` owns loading, errors, and document-specific dismissal; `documents.js` fetches generated HTML. All document cards use the shared foreground-card behavior, including Close, backdrop dismissal, and Escape. Closing restores trigger focus and page scroll while retaining the current dashboard view and selected week. Late responses are ignored after dismissal.
 
 `scripts/generate_documents.py` generates dashboard presentation from the complete repository source documents:
 
 - `RULES.md` → `assets/documents/rules.html`, rendered using CommonMark.
 - `LICENSE` → `assets/documents/license.html`, rendered as escaped plain-text paragraphs.
 - `LICENSE-SCOPE.md` → `assets/documents/license-scope.html`, rendered using CommonMark.
+- `LEGAL.md` → `assets/documents/legal.html`, rendered using CommonMark.
 
 Raw HTML is disabled for Markdown sources. Plain-text rendering preserves wording and paragraph boundaries, joining source lines within each paragraph so the browser wraps text naturally at the available width. Keep `LICENSE` as extensionless plain text. Edit the source documents rather than maintaining presentation copies; generated `assets/documents/` files are ignored by Git.
 
@@ -285,12 +286,12 @@ Before serving the repository locally, generate the documents:
     python -m scripts.generate_documents
     python -m http.server 8000 --bind 127.0.0.1
 
-Regenerate after editing `RULES.md`, `LICENSE`, or `LICENSE-SCOPE.md`. To preview the production artifact instead:
+Regenerate after editing `RULES.md`, `LICENSE`, `LICENSE-SCOPE.md`, or `LEGAL.md`. To preview the production artifact instead:
 
     python -m scripts.build_site
     python -m http.server 8000 --bind 127.0.0.1 --directory build/site
 
-The builder replaces `build/site` with public root files, assets, dashboard JSON, and freshly generated documents. The original `LICENSE` and `LICENSE-SCOPE.md` files remain directly available in the published artifact. CSV imports, raw provider responses, Python source, and development files are excluded. The normal deployment rebuilds document presentation after source edits.
+The builder replaces `build/site` with public root files, assets, dashboard JSON, and freshly generated documents. The original `LICENSE`, `LICENSE-SCOPE.md`, and `LEGAL.md` files remain directly available in the published artifact. CSV imports, raw provider responses, Python source, and development files are excluded. The normal deployment rebuilds document presentation after source edits.
 
 `deploy-pages.yml` builds and publishes this artifact after relevant changes on `main`, manual dispatch, or successful production data-processing workflows. The latter handles bot commits, which do not trigger another push workflow. Processing runs without a new commit skip publication. Pending runs queue so no-op processing runs cannot replace pending production deployments; running deployments are not canceled. Configure the repository's **Settings → Pages → Source** as **GitHub Actions** before using this deployment workflow. Manual deployment also builds `main`.
 

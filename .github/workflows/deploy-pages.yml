@@ -10,6 +10,7 @@ on:
       - RULES.md
       - LICENSE
       - LICENSE-SCOPE.md
+      - LEGAL.md
       - CNAME
       - manifest.webmanifest
       - scripts/build_site.py

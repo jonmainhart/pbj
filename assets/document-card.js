@@ -6,6 +6,7 @@ export function initializeDocumentCards() {
         rules: { title: "Pool Rules", url: "./assets/documents/rules.html" },
         license: { title: "Apache 2.0", url: "./assets/documents/license.html" },
         "license-scope": { title: "Data & artwork terms", url: "./assets/documents/license-scope.html" },
+        legal: { title: "Legal Notice", url: "./assets/documents/legal.html" },
     };
     document.querySelectorAll("[data-document]").forEach((trigger) => {
         trigger.addEventListener("click", () => {
