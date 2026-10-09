@@ -15,9 +15,9 @@
         "abbreviation": "DAL",
         "name": "Dallas Cowboys"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 7,
+      "home_score": 7
     },
     {
       "id": "1392281",
