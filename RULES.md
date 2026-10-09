@@ -16,7 +16,14 @@ Before a game is final:
 - `🟢` Live — pick is winning or tied
 - `🟡` Live — pick is losing
 
-## Weekly Standings
+### Monday Night Tiebreaker
+
+- Predict the combined score of the Monday night game or games.
+- Closest prediction wins the tiebreaker.
+- Multiple Monday games are combined into one total.
+- Equal tiebreaker distances remain tied.
+
+### Weekly Standings
 
 Players are ranked by:
 
@@ -34,12 +41,17 @@ Weekly standings become official after every game is final.
 - Each tied winner receives one weekly win for season tracking.
 - `💩` Players sharing the lowest rank each receive a last-place finish.
 
-## Monday Tiebreaker
+### Weekly Elimination
 
-- Predict the combined score of the Monday night game or games.
-- Closest prediction wins the tiebreaker.
-- Multiple Monday games are combined into one total.
-- Equal tiebreaker distances remain tied.
+A player remains in contention if any possible combination of remaining game results allows that player to finish tied for the most wins.
+
+A player is eliminated only when no such combination remains.
+
+The Monday tiebreaker is not used for early elimination.
+
+Players still in contention appear above the `ELIMINATED` divider.
+
+Elimination does not affect scoring or final rankings.
 
 ## Season Standings
 
@@ -64,14 +76,4 @@ Season indicators:
 
 Weekly wins and last-place finishes are tracked but do not affect season ranking.
 
-## Elimination
 
-A player remains in contention if any possible combination of remaining game results allows that player to finish tied for the most wins.
-
-A player is eliminated only when no such combination remains.
-
-The Monday tiebreaker is not used for early elimination.
-
-Players still in contention appear above the `ELIMINATED` divider.
-
-Elimination does not affect scoring or final rankings.
