@@ -21,6 +21,7 @@ def test_site_contains_public_assets_and_json_but_not_private_or_development_fil
         (source / name).write_text(name, encoding="utf-8")
     for name, content in LICENSE_SOURCES.items():
         (source / name).write_text(content, encoding="utf-8")
+    (source / "LEGAL.md").write_text("# Legal Notice\n\nFixture legal notice.\n", encoding="utf-8")
     (source / "RULES.md").write_text("# Rules\n\nCanonical rules.\n", encoding="utf-8")
     (source / "BALLDONTLIE.key").write_text("secret", encoding="utf-8")
     (source / "assets").mkdir()
@@ -63,6 +64,7 @@ def test_build_replaces_stale_site_files_on_rebuild(tmp_path: Path) -> None:
         (source / name).touch()
     for name, content in LICENSE_SOURCES.items():
         (source / name).write_text(content, encoding="utf-8")
+    (source / "LEGAL.md").write_text("# Legal Notice\n\nFixture legal notice.\n", encoding="utf-8")
     (source / "RULES.md").write_text("# Rules\n", encoding="utf-8")
     (source / "assets").mkdir()
     (source / "data").mkdir()

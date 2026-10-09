@@ -16,6 +16,7 @@ PUBLIC_FILES = (
     "RULES.md",
     "LICENSE",
     "LICENSE-SCOPE.md",
+    "LEGAL.md",
 )
 WEEKLY_DATA = re.compile(r"(?:week\d{2}|season)\.json")
 

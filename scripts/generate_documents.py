@@ -28,6 +28,7 @@ DOCUMENTS = (
     Document(name="rules", source="RULES.md", format="markdown"),
     Document(name="license", source="LICENSE", format="text"),
     Document(name="license-scope", source="LICENSE-SCOPE.md", format="markdown"),
+    Document(name="legal", source="LEGAL.md", format="markdown"),
 )
 
 
