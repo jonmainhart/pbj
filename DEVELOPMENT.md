@@ -341,6 +341,7 @@ Before committing Python changes:
     pytest
     mypy src tests
     ruff check .
+    ruff format --check .
 
 Coverage can be checked with:
 
@@ -356,6 +357,7 @@ Frontend tests use Node's built-in test runner for deterministic logic and Playw
 
     npm ci
     npx playwright install chromium
+    npm run lint
     node --test tests/frontend/unit/*.test.js
     npx playwright test
 
@@ -374,3 +376,75 @@ PBJ Dashboard source code and project documentation are licensed under the Apach
 Pool participant data under `data/` and PBJ artwork and branding under `assets/img/` are expressly excluded from the Apache license. Third-party sports data, team identifiers, trademarks, and other third-party material are not licensed by this project.
 
 See [LICENSE](LICENSE) and [LICENSE-SCOPE.md](LICENSE-SCOPE.md) for details.
+
+## Change-aware Quality Gates
+
+CI is authoritative. `.github/workflows/quality.yml` provides the always-present
+**Quality gates** job for every PR to `main`, push to `main`, and manual dispatch.
+Python changes run Ruff lint/format, mypy, and full pytest. JavaScript, HTML, CSS,
+and public document changes run ESLint, Node tests, and full Chromium Playwright.
+Python scripts also run browser checks because they generate browser inputs.
+Documentation changes validate document generation and the public build; public
+rules/legal/license documents also receive browser checks. Relevant QA config,
+all workflow changes, and unknown file types select full checks. Manual dispatch
+and initial pushes run everything. PR detection uses the merge base and both sides
+of renames; pushes compare the complete before/after range. Detection errors fail
+the job. Every run parses tracked JSON/webmanifest files. Data-only JSON/CSV
+changes skip full pytest, browser tests, and builds. JSON parsing is syntax
+validation, not a domain schema or CSV import validation.
+
+### Optional local hook
+
+The native hook installed for this checkout is `.git/hooks/pre-commit`; it is
+executable, local, and untracked. No hook manager or repository template is used.
+For another clone, create an executable hook at that same path using the commands
+below and staged-path selection (`git diff --cached --name-only --no-renames -z`).
+Install Python development dependencies and run `npm ci` first. Ensure
+`git config --get core.hooksPath` is unset (otherwise Git uses that directory).
+The hook uses `.venv/bin/python` when available, otherwise its Python interpreter.
+Frontend development requires Node 22.13 or newer for ESLint 10.
+
+- Python source/tests: verify the installed PBJ source matches the checkout, then
+  `ruff check .`, `ruff format --check .`, and `pytest -m smoke -q`.
+- JavaScript source/tests: `npm run lint` and `npm run test:unit`.
+- QA configuration/workflows: both groups; mixed changes use their union.
+- JSON: parse staged blobs, including partially staged JSON; skip deleted files.
+- Documentation/HTML/CSS only: no automatic source tests; use CI and manual checks.
+
+The hook refuses source checks when any tracked worktree file differs from the
+index, or any non-ignored untracked files are present. Stage or temporarily set
+aside those changes first. This also protects against unstaged dependency files,
+not just partially staged source. It never stashes or alters the index. The local
+package comparison prevents a stale non-editable installation from passing tests
+against old source; a mismatch fails with a reinstall instruction. Run
+`python -m pip install ".[dev]"` after source or dependency changes;
+CI installs clean dependencies. Hooks are optional and may be bypassed with
+`git -c core.hooksPath=/dev/null commit` when necessary; CI remains required.
+
+Manual smoke checks remain:
+
+    pytest -m smoke -q
+    npx playwright test --grep @smoke
+
+The selections remain 15 Python and 6 browser tests. Full frontend validation is
+`npm run lint && npm test`; full Python checks are listed above. Playwright, mypy,
+and full pytest are never automatic local pre-commit checks. ESLint uses recommended
+correctness rules and browser/Node globals without enforcing formatting. Ruff's
+expanded SIM/PERF/RUF/S families pass; tests alone exclude S101 for assertions.
+Formatting is gated after one tuple-only formatting correction in a test.
+
+### Manual GitHub configuration and automation
+
+In branch protection/rulesets for `main`, require **Quality gates** for normal PRs.
+Do not require conditional jobs or deployment statuses as QA gates. No repository
+settings are changed by this work. Review actor bypass permissions before enabling
+required PRs or status checks: create-week, import-picks, and poll-games push direct
+bot commits, which cannot have a pre-push QA status. Their `GITHUB_TOKEN` commits
+also do not trigger push workflows. Required checks/PRs without a supported,
+explicit automation bypass can block these pushes; adding a required status alone
+is not sufficient. If your ruleset cannot grant a narrowly scoped automation
+bypass, retain the existing direct-push policy until a separate automation identity
+or PR-based data flow is deliberately configured. Human CSV submissions must also
+follow whichever main-branch policy is chosen. Existing production workflows and
+Pages publication remain independent and unchanged; quality is not a deployment
+dependency. Routine score commits never run full QA through this workflow.
