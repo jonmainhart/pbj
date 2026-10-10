@@ -36,6 +36,7 @@ def _game(status: GameStatus) -> Game:
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_selects_unfinished_week_before_future_week() -> None:
     weeks = {
         1: [_game(GameStatus.FINAL)],

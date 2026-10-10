@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { player, week, mockDashboard } from "./fixtures.js";
 
-test("latest week is the default, query selection is honored, and changing weeks updates the URL", async ({ page }) => {
+test("latest week is the default, query selection is honored, and changing weeks updates the URL", { tag: "@smoke" }, async ({ page }) => {
     await mockDashboard(page, {
         "/data/available-weeks.json": { "2026": [1, 2] },
         "/data/2026/week02.json": week({ week: 2, players: [player("beth")] }),

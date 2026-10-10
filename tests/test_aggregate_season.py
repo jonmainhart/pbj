@@ -169,6 +169,7 @@ def test_week_without_results_is_ignored(
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_multiple_completed_weeks_are_aggregated(
     tmp_path: Path,
 ):
