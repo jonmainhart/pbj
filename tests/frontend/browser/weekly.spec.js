@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { game, player, result, week, mockDashboard } from "./fixtures.js";
 
-test("picks show pending, live, final, tied, and N/P outcomes", async ({ page }) => {
+test("picks show pending, live, final, tied, and N/P outcomes", { tag: "@smoke" }, async ({ page }) => {
     const games = [
         game("pending"),
         game("ahead", { status: "live", away_score: 7, home_score: 0 }),

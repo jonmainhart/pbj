@@ -32,7 +32,7 @@ test("Rules loads the generated canonical document from the static server", asyn
     await expect(close(page)).toBeFocused();
 });
 
-test("footer Rules opens a formatted document without navigating away", async ({ page }) => {
+test("footer Rules opens a formatted document without navigating away", { tag: "@smoke" }, async ({ page }) => {
     await setup(page);
     await expect(page.getByRole("contentinfo").getByRole("button", { name: "Rules", exact: true })).toBeVisible();
     const url = page.url();
