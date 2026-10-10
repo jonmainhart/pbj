@@ -252,6 +252,16 @@ The season view uses `👑` for the current first-place player, `🏆` for weekl
 
 Python scoring remains authoritative. JavaScript presents the underlying state.
 
+### Responsive Card Layout
+
+Weekly player and season standings lists remain single-column at every viewport width. The previous 600px two-column resting-card layout is intentionally removed, including for larger phones in landscape.
+
+At viewport widths of 800px and above, weekly resting cards use a wide, shallow two-row layout: the player name and prominent W-L-T record appear above a compact sequence of picks in game order, alongside Win %. The compact pick row uses the same status indicators and colors as the detailed pick list, includes N/P, and does not wrap into matchup-like rows. Tiebreaker values remain in the expanded details, and weekly ranks and winner treatments remain unavailable until the week is complete. The eliminated-player divider remains the sole resting-list elimination label.
+
+Compact picks are presentation-only elements on resting cards. `weekly.js` creates them from existing game and pick data; `player-card.js` removes `.compact-picks` when cloning a card into the foreground overlay, preserving the expanded card's detailed pick list. No new data is persisted.
+
+At the same breakpoint, season standings use wide, shallow single-column cards while preserving the season record, Win %, weeks played, missed picks, and finish indicators. Below 800px, both lists retain their smaller-screen card presentation.
+
 ### Weekly Games View and Navigation
 
 Players is the default weekly presentation. Games is derived from the same weekly JSON without adding persisted pick data. Games are sorted by kickoff, with unfinished games before final games; equal kickoff times retain input order.
@@ -352,6 +362,8 @@ Frontend tests use Node's built-in test runner for deterministic logic and Playw
 Unit tests live in `tests/frontend/unit`; browser tests and synthetic JSON fixtures live in `tests/frontend/browser`. Browser tests serve the real static site and intercept data requests, independently of production participant data. Playwright starts Python's static server on `127.0.0.1:8000` and can reuse an existing local server outside CI.
 
 Playwright's global setup regenerates document assets before every run, including when reusing a server. It uses `.venv/bin/python` when present, otherwise `python3`; set `PBJ_PYTHON` to select another interpreter with the document dependencies installed. Shared document behavior is tested with synthetic HTML, and browser tests also load the real generated Rules, license, and scope assets. License checks cover complete paragraph content, natural wrapping, phone and desktop scrolling, horizontal overflow, usable Close controls, and restoration of trigger focus and dashboard state. Python tests cover escaping, paragraph boundaries, and regeneration from source documents while preserving the original files in the published artifact.
+
+Responsive card browser tests in `tests/frontend/browser/card-layout.spec.js` cover single-column ordering across phone, intermediate, and desktop widths; the 799px/800px layout boundary; 16 compact picks without wrapping; status indicators; preservation of expanded details; and season-card content.
 
 Automated browser checks use desktop Chromium, including narrow-screen functional checks. Mobile Safari is tested manually. Focus, scrolling, overflow, and usable controls matter more than pixel-perfect snapshots.
 

@@ -605,6 +605,10 @@ h1 {
   background: #efe8dd;
 }
 
+.compact-picks {
+  display: none;
+}
+
 .player-details-inner {
   padding: 0 0.85rem 1rem;
 }
@@ -963,13 +967,121 @@ h1 {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .player-list,
-  .season-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .player-card-overlay .detail-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Wide resting cards; expanded cards retain their existing presentation. */
+@media (min-width: 800px) {
+  #player-list .player-summary {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    row-gap: 0.2rem;
+    min-height: 44px;
+    padding: 0.5rem 0.85rem;
+  }
+
+  #player-list .player-summary-name {
+    display: contents;
+  }
+
+  #player-list .player-name {
+    grid-column: 1;
+    grid-row: 1;
+    overflow-wrap: anywhere;
+  }
+
+  #player-list .player-summary-right {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  #player-list .player-accuracy {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+
+  #player-list .player-summary::after {
+    grid-column: 3;
+    grid-row: 1 / 3;
+  }
+
+  #player-list .player-record {
+    margin-top: 0;
+    white-space: nowrap;
+  }
+
+  #player-list .compact-picks {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 0.1rem;
+    font-size: 0.6875rem;
+  }
+
+  #player-list .compact-picks .pick-value {
+    flex: 0 0 auto;
+    grid-template-columns: max-content max-content;
+    column-gap: 0.15rem;
+  }
+
+  #player-list .compact-picks .pick-status {
+    font-size: 0.85em;
+  }
+
+  #season-list .season-card {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    column-gap: 0.75rem;
+    row-gap: 0.2rem;
+    padding: 0.5rem 0.85rem;
+  }
+
+  #season-list .season-left,
+  #season-list .season-right {
+    display: contents;
+  }
+
+  #season-list .season-name {
+    grid-column: 1;
+    grid-row: 1;
+    overflow-wrap: anywhere;
+  }
+
+  #season-list .season-record {
+    grid-column: 3;
+    grid-row: 1;
+    margin-top: 0;
+    white-space: nowrap;
+    justify-self: end;
+  }
+
+  #season-list .season-accuracy {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: end;
+  }
+
+  #season-list .season-meta {
+    grid-column: 1;
+    grid-row: 2;
+    margin-top: 0;
+  }
+
+  #season-list .weekly-wins {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    text-align: right;
+  }
+}
+
+@media (min-width: 960px) {
+  #player-list .compact-picks {
+    font-size: 0.8rem;
   }
 }
 

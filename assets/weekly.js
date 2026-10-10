@@ -329,6 +329,7 @@ function createPlayerCard(
     summary.setAttribute("aria-expanded", "false");
 
     const nameBlock = document.createElement("div");
+    nameBlock.className = "player-summary-name";
 
     const name = document.createElement("div");
     name.className = "player-name";
@@ -392,6 +393,18 @@ function createPlayerCard(
     summary.dataset.openKind = "player";
     summary.dataset.openId = player.id;
 
+    const compactPicks = document.createElement("div");
+    compactPicks.className = "compact-picks";
+    compactPicks.setAttribute("role", "list");
+    compactPicks.setAttribute("aria-label", "Picks in game order");
+    for (const game of games) {
+        const pick = createPickValue(player.picks?.[game.id], game);
+        pick.setAttribute("role", "listitem");
+        pick.setAttribute("aria-label", `${formatGameDisplay(game)}: ${pick.textContent}`);
+        compactPicks.append(pick);
+    }
+
+    summary.append(compactPicks);
     card.append(summary, body);
 
     return card;
@@ -473,33 +486,30 @@ function createPickList(player, games) {
 
         gameName.textContent = formatGameDisplay(game);
 
-        const pick = document.createElement("div");
-
-        const pickValue = player.picks?.[game.id];
-
-        const status = getPickStatus(
-            pickValue,
-            game,
-        );
-
-        pick.className =
-            `pick-value ${status.className}`;
-
-        const statusIcon = document.createElement("span");
-        statusIcon.className = "pick-status";
-        statusIcon.textContent = status.icon;
-
-        const teamPick = document.createElement("span");
-        teamPick.className = "pick-team";
-        teamPick.textContent = pickValue ?? "N/P";
-
-        pick.append(statusIcon, teamPick);
+        const pick = createPickValue(player.picks?.[game.id], game);
 
         row.append(gameName, pick);
         list.append(row);
     }
 
     return list;
+}
+
+function createPickValue(pickValue, game) {
+    const pick = document.createElement("div");
+    const status = getPickStatus(pickValue, game);
+    pick.className = `pick-value ${status.className}`;
+
+    const statusIcon = document.createElement("span");
+    statusIcon.className = "pick-status";
+    statusIcon.textContent = status.icon;
+
+    const teamPick = document.createElement("span");
+    teamPick.className = "pick-team";
+    teamPick.textContent = pickValue ?? "N/P";
+
+    pick.append(statusIcon, teamPick);
+    return pick;
 }
 
 

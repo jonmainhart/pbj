@@ -19,6 +19,7 @@ export function openPlayerCard(sourceCard, options = {}) {
     const close = options.onClose ?? onClose;
     const raisedCard = sourceCard.cloneNode(true);
     raisedCard.classList.remove("is-selected");
+    raisedCard.querySelector(".compact-picks")?.remove();
     const raisedSummary = raisedCard.querySelector(".player-summary");
     raisedSummary.setAttribute("aria-expanded", "true");
 
