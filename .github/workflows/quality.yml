@@ -96,7 +96,7 @@ jobs:
         run: |
           ruff check .
           ruff format --check .
-          mypy src tests
+          mypy src scripts tests
           pytest
       - uses: actions/setup-node@v6
         if: steps.changes.outputs.frontend == 'true'

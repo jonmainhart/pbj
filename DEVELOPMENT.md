@@ -339,7 +339,7 @@ For `should_poll.py`, exit code 0 means polling is required and exit code 1 mean
 Before committing Python changes:
 
     pytest
-    mypy src tests
+    mypy src scripts tests
     ruff check .
     ruff format --check .
 
@@ -405,7 +405,7 @@ The hook uses `.venv/bin/python` when available, otherwise its Python interprete
 Frontend development requires Node 22.13 or newer for ESLint 10.
 
 - Python source/tests: verify the installed PBJ source matches the checkout, then
-  `ruff check .`, `ruff format --check .`, and `pytest -m smoke -q`.
+  `ruff check .`, `ruff format --check .`, `mypy src scripts tests`, and `pytest -m smoke -q`.
 - JavaScript source/tests: `npm run lint` and `npm run test:unit`.
 - QA configuration/workflows: both groups; mixed changes use their union.
 - JSON: parse staged blobs, including partially staged JSON; skip deleted files.
@@ -427,8 +427,8 @@ Manual smoke checks remain:
     npx playwright test --grep @smoke
 
 The selections remain 15 Python and 6 browser tests. Full frontend validation is
-`npm run lint && npm test`; full Python checks are listed above. Playwright, mypy,
-and full pytest are never automatic local pre-commit checks. ESLint uses recommended
+`npm run lint && npm test`; full Python checks are listed above. Playwright and
+full pytest are never automatic local pre-commit checks. ESLint uses recommended
 correctness rules and browser/Node globals without enforcing formatting. Ruff's
 expanded SIM/PERF/RUF/S families pass; tests alone exclude S101 for assertions.
 Formatting is gated after one tuple-only formatting correction in a test.
