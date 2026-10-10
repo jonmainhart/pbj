@@ -36,7 +36,7 @@ jobs:
           base = os.environ['BASE']
           full = os.environ['EVENT'] == 'workflow_dispatch' or not base or set(base) == {'0'}
           if not full:
-              # Fail closed: a missing base or failed diff fails the stable required job.
+              # Fail closed: a missing base or failed diff fails the QA job.
               subprocess.run(['git', 'cat-file', '-e', base], check=True)
               if os.environ['EVENT'] == 'pull_request':
                   base = subprocess.check_output(
@@ -83,10 +83,16 @@ jobs:
           import subprocess
           from pathlib import Path
 
+          def reject_constant(value):
+              raise ValueError(f'Nonstandard JSON constant: {value}')
+
           for name in subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0'):
               if name.endswith(('.json', '.webmanifest')):
-                  with Path(name).open() as source:
-                      json.load(source)
+                  try:
+                      with Path(name).open() as source:
+                          json.load(source, parse_constant=reject_constant)
+                  except (ValueError, OSError) as error:
+                      raise SystemExit(f'{name}: {error}') from error
           PY
       - name: Install Python development dependencies
         if: steps.changes.outputs.python == 'true' || steps.changes.outputs.frontend == 'true' || steps.changes.outputs.build == 'true'
