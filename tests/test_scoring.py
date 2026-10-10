@@ -124,6 +124,7 @@ def test_incorrect_pick_counts_as_loss():
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_final_nfl_tie_counts_as_tie():
     """A final NFL tie counts as a tie and contributes half to Win %."""
     games = [
@@ -213,6 +214,7 @@ def test_missing_pick_on_nfl_tie_counts_as_loss():
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_missing_pick_is_included_in_win_percentage():
     """Missing picks are losses and therefore reduce Win %."""
     games = [
@@ -375,6 +377,7 @@ def test_missing_pick_on_live_game_is_ignored():
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_partial_week_counts_only_final_games():
     """Incomplete weeks still expose current results from final games."""
     games = [
@@ -717,6 +720,7 @@ def test_player_with_most_wins_is_weekly_winner():
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_equal_wins_are_resolved_by_tiebreaker():
     """Monday tiebreaker distance resolves equal weekly win totals."""
     games = [

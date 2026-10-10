@@ -152,6 +152,7 @@ def test_default_csv_path() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_import_replaces_players(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -325,6 +326,7 @@ def test_successful_import_removes_csv(
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_import_failure_preserves_csv(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

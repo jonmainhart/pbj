@@ -42,6 +42,7 @@ def _game(
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_import_players_imports_normal_row():
     """A normal commissioner row becomes a Player."""
     games = [
@@ -176,6 +177,7 @@ def test_import_players_accepts_decimal_tiebreaker():
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_import_players_warns_and_omits_non_pick(
     caplog,
 ):

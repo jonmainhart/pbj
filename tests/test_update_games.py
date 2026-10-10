@@ -117,6 +117,7 @@ def test_update_week_requests_correct_season_and_week(
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_update_week_sets_lock_time_from_first_game(
     tmp_path,
     mocker,
@@ -303,6 +304,7 @@ def test_update_week_preserves_results(
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_update_week_replaces_only_game_data(
     tmp_path,
     mocker,
