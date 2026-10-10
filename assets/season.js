@@ -56,6 +56,7 @@ function createSeasonCard(player, position, getPlayerName) {
     card.className = "season-card";
 
     const left = document.createElement("div");
+    left.className = "season-left";
 
     const name = document.createElement("div");
     name.className = "season-name";

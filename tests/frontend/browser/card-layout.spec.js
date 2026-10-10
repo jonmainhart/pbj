@@ -68,16 +68,28 @@ for (const width of [800, 844, 1280]) {
         await expect(picks.locator(".pick-status")).toHaveText(Array(16).fill("⏳"));
         await expect(summary.locator(".player-record")).toHaveText("2-1-1");
         await expect(summary.locator(".player-accuracy")).toHaveText("Win %: 50");
-        const top = await boxes(summary.locator(".player-name, .player-record, .player-accuracy"));
-        expect(Math.max(...top.map((b) => b.y))).toBeLessThan(Math.min(...top.map((b) => b.y + b.height)));
+        const [record] = await boxes(summary.locator(".player-record"));
+        const [winPercent] = await boxes(summary.locator(".player-accuracy"));
+        expect(winPercent.y).toBeGreaterThanOrEqual(record.y + record.height);
+        expect(winPercent.x + winPercent.width).toBeCloseTo(record.x + record.width, 0);
         const pickBounds = await boxes(picks.locator(".pick-value"));
+        const glyphGaps = await picks.locator(".pick-value").evaluateAll((values) => values.map((value) => {
+            const glyphBounds = (selector) => {
+                const range = document.createRange();
+                range.selectNodeContents(value.querySelector(selector));
+                return range.getBoundingClientRect();
+            };
+            return glyphBounds(".pick-team").left - glyphBounds(".pick-status").right;
+        }));
+        for (const gap of glyphGaps) expect(gap).toBeGreaterThanOrEqual(2);
         const [cardBounds] = await boxes(card);
-        const [summaryBounds] = await boxes(summary);
+        const [nameBounds] = await boxes(summary.locator(".player-name"));
         for (const [index, bound] of pickBounds.entries()) {
             expect(bound.y).toBeCloseTo(pickBounds[0].y, 0);
-            expect(bound.y).toBeGreaterThanOrEqual(summaryBounds.y + summaryBounds.height);
+            expect(bound.y).toBeGreaterThanOrEqual(nameBounds.y + nameBounds.height);
             expect(bound.x).toBeGreaterThanOrEqual(cardBounds.x);
             expect(bound.x + bound.width).toBeLessThanOrEqual(cardBounds.x + cardBounds.width);
+            expect(bound.x + bound.width).toBeLessThan(Math.min(record.x, winPercent.x));
             if (index > 0) expect(bound.x).toBeGreaterThanOrEqual(pickBounds[index - 1].x + pickBounds[index - 1].width);
         }
         expect(await picks.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
@@ -136,8 +148,10 @@ for (const width of [800, 1280]) {
         await loadCards(page);
         await page.getByRole("button", { name: "🏆 Season" }).click();
         const first = page.locator(".season-card").first();
-        const top = await boxes(first.locator(".season-name, .season-record, .season-accuracy"));
-        expect(Math.max(...top.map((b) => b.y))).toBeLessThan(Math.min(...top.map((b) => b.y + b.height)));
+        const [record] = await boxes(first.locator(".season-record"));
+        const [winPercent] = await boxes(first.locator(".season-accuracy"));
+        expect(winPercent.y).toBeGreaterThanOrEqual(record.y + record.height);
+        expect(winPercent.x + winPercent.width).toBeCloseTo(record.x + record.width, 0);
         await expect(page.locator(".season-record")).toHaveText(["10-0-0", "9-1-0", "8-2-0"]);
         await expect(page.locator(".season-meta")).toHaveText([
             "Weeks played: 1 • Missed picks: 0", "Weeks played: 1 • Missed picks: 1", "Weeks played: 1 • Missed picks: 2",
