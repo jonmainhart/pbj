@@ -149,7 +149,7 @@ for (const method of ["summary", "Escape", "backdrop"]) {
     });
 }
 
-test("Player A → Game → Player B closes at Player B without returning through history", async ({ page }) => {
+test("Player A → Game → Player B closes at Player B without returning through history", { tag: "@smoke" }, async ({ page }) => {
     await load(page);
     await playerSummary(page).click();
     await details(page, "Player").getByRole("button", { name: /BUF.*MIA/ }).click();

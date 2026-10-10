@@ -7,7 +7,7 @@ function seasonPlayer(id, overrides = {}) {
         ...overrides };
 }
 
-test("season sorts by wins then Win %, uses competition ranks, and shows finish counts", async ({ page }) => {
+test("season sorts by wins then Win %, uses competition ranks, and shows finish counts", { tag: "@smoke" }, async ({ page }) => {
     await mockDashboard(page, {
         "/data/2026/week01.json": week({ players: [player("alex", { nickname: "Ace" })] }),
         "/data/2026/week02.json": week({ week: 2, players: [player("beth", { name: "Beth Example" })] }),

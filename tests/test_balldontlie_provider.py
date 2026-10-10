@@ -92,6 +92,7 @@ def test_get_week_returns_scheduled_game(mocker):
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_get_week_returns_live_game_with_scores(mocker):
     """A live BALLDONTLIE game is normalized with its current scores."""
     _mock_response(

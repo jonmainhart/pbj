@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("weekly dashboard loads and a player card opens and closes", async ({ page }) => {
+test("weekly dashboard loads and a player card opens and closes", { tag: "@smoke" }, async ({ page }) => {
     const week = {
         season: 2026,
         week: 1,

@@ -152,6 +152,7 @@ def test_default_csv_path() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_import_replaces_players(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -325,6 +326,7 @@ def test_successful_import_removes_csv(
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_import_failure_preserves_csv(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -427,7 +429,7 @@ def test_missing_csv_raises_error(
 
     with pytest.raises(
         FileNotFoundError,
-        match="week02.csv",
+        match=r"week02.csv",
     ):
         import_picks.import_picks_file(
             week_path=week_path,

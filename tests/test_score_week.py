@@ -103,6 +103,7 @@ def _read_week(
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_score_week_writes_results(
     tmp_path: Path,
 ):

@@ -109,6 +109,7 @@ def test_scheduled_game_stops_after_six_hours() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.smoke
 def test_live_game_always_polls() -> None:
     now = datetime(
         2026,

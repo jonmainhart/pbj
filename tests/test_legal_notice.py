@@ -41,7 +41,12 @@ def test_public_build_retains_legal_source_and_generates_presentation(tmp_path: 
     source = tmp_path / "source"
     source.mkdir()
     for name in (
-        "index.html", "CNAME", "manifest.webmanifest", "RULES.md", "LICENSE", "LICENSE-SCOPE.md"
+        "index.html",
+        "CNAME",
+        "manifest.webmanifest",
+        "RULES.md",
+        "LICENSE",
+        "LICENSE-SCOPE.md",
     ):
         (source / name).write_text("Fixture content\n", encoding="utf-8")
     (source / "LEGAL.md").write_text(NOTICE, encoding="utf-8")
