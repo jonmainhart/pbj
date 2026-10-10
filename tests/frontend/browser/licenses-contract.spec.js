@@ -19,10 +19,10 @@ async function setup(page) {
     await expect(page.locator("#week-status")).toHaveText("Week 1 In Progress");
 }
 
-test("footer retains existing wording and adds Legal Notice", async ({ page }) => {
+test("footer orders Rules, Legal Notice, data terms, and code license", async ({ page }) => {
     await setup(page);
     await expect(page.getByRole("contentinfo")).toHaveText(
-        "© 2026 Plus-Sized Squirrels • Code licensed under Apache 2.0 • Data & artwork terms • Rules • Legal Notice",
+        "© 2026 Plus-Sized Squirrels • Rules • Legal Notice • Data & artwork terms • Code licensed under Apache 2.0",
     );
 });
 
