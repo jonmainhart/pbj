@@ -427,7 +427,7 @@ def test_missing_csv_raises_error(
 
     with pytest.raises(
         FileNotFoundError,
-        match="week02.csv",
+        match=r"week02.csv",
     ):
         import_picks.import_picks_file(
             week_path=week_path,
