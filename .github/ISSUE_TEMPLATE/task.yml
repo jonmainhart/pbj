@@ -1,0 +1,93 @@
+name: PBJ task
+description: Plan a bug fix, enhancement, maintenance task, or refactor.
+title: ""
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What outcome should this issue deliver?
+      placeholder: Describe the requested change in a few sentences.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: task-type
+    attributes:
+      label: Type
+      description: Select the kind of work.
+      options:
+        - Bug
+        - Enhancement
+        - Maintenance
+        - Refactor
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Choose the current priority; it can be revised later.
+      options:
+        - P1
+        - P2
+        - P3
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is the change worthwhile?
+      placeholder: Explain the problem, context, or opportunity.
+    validations:
+      required: false
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What should change, and which constraints must be preserved?
+      placeholder: Describe the implementation boundaries and expected behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: Identify related work that should not be included, when relevant.
+      placeholder: List explicit exclusions, if any.
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: State observable conditions for considering the work complete.
+      placeholder: |
+        - [ ] First verifiable outcome
+        - [ ] Second verifiable outcome
+    validations:
+      required: false
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation
+      description: How will the implementation be tested or verified?
+      placeholder: Include automated checks and any relevant operational checks.
+    validations:
+      required: false
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and related issues
+      description: Record related issues, sequencing, risks, or prior decisions.
+      placeholder: Reference issue numbers or links as appropriate.
+    validations:
+      required: false
