@@ -49,7 +49,7 @@
         "abbreviation": "TEN",
         "name": "Tennessee Titans"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 26,
       "home_score": 3
     },
@@ -119,7 +119,7 @@
       },
       "status": "live",
       "away_score": 12,
-      "home_score": 10
+      "home_score": 17
     },
     {
       "id": "1392287",
@@ -136,7 +136,7 @@
       },
       "status": "live",
       "away_score": 22,
-      "home_score": 31
+      "home_score": 34
     },
     {
       "id": "1392288",
