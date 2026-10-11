@@ -66,9 +66,9 @@
         "abbreviation": "MIA",
         "name": "Miami Dolphins"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 31,
-      "home_score": 18
+      "home_score": 24
     },
     {
       "id": "1392284",
@@ -117,7 +117,7 @@
         "abbreviation": "NYJ",
         "name": "New York Jets"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 12,
       "home_score": 17
     },
@@ -134,7 +134,7 @@
         "abbreviation": "PIT",
         "name": "Pittsburgh Steelers"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 22,
       "home_score": 34
     },
@@ -152,7 +152,7 @@
         "name": "Washington Commanders"
       },
       "status": "live",
-      "away_score": 26,
+      "away_score": 27,
       "home_score": 27
     },
     {
@@ -168,7 +168,7 @@
         "abbreviation": "GB",
         "name": "Green Bay Packers"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 7,
       "home_score": 31
     },
