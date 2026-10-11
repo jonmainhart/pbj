@@ -85,7 +85,7 @@
       },
       "status": "live",
       "away_score": 17,
-      "home_score": 38
+      "home_score": 45
     },
     {
       "id": "1392285",
@@ -100,7 +100,7 @@
         "abbreviation": "NO",
         "name": "New Orleans Saints"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 23,
       "home_score": 13
     },
@@ -152,7 +152,7 @@
         "name": "Washington Commanders"
       },
       "status": "live",
-      "away_score": 13,
+      "away_score": 20,
       "home_score": 27
     },
     {
