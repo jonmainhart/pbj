@@ -83,7 +83,7 @@
         "abbreviation": "NE",
         "name": "New England Patriots"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 17,
       "home_score": 45
     },
@@ -152,7 +152,7 @@
         "name": "Washington Commanders"
       },
       "status": "live",
-      "away_score": 20,
+      "away_score": 26,
       "home_score": 27
     },
     {
@@ -185,9 +185,9 @@
         "abbreviation": "LAC",
         "name": "Los Angeles Chargers"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392291",
