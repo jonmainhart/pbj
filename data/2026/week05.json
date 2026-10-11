@@ -67,7 +67,7 @@
         "name": "Miami Dolphins"
       },
       "status": "live",
-      "away_score": 21,
+      "away_score": 28,
       "home_score": 10
     },
     {
@@ -135,7 +135,7 @@
         "name": "Pittsburgh Steelers"
       },
       "status": "live",
-      "away_score": 19,
+      "away_score": 22,
       "home_score": 24
     },
     {
@@ -152,7 +152,7 @@
         "name": "Washington Commanders"
       },
       "status": "live",
-      "away_score": 12,
+      "away_score": 13,
       "home_score": 19
     },
     {
@@ -170,7 +170,7 @@
       },
       "status": "live",
       "away_score": 7,
-      "home_score": 23
+      "home_score": 31
     },
     {
       "id": "1392289",
