@@ -49,9 +49,9 @@
         "abbreviation": "TEN",
         "name": "Tennessee Titans"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392283",
@@ -66,9 +66,9 @@
         "abbreviation": "MIA",
         "name": "Miami Dolphins"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392284",
@@ -83,9 +83,9 @@
         "abbreviation": "NE",
         "name": "New England Patriots"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392285",
@@ -100,9 +100,9 @@
         "abbreviation": "NO",
         "name": "New Orleans Saints"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392286",
@@ -117,9 +117,9 @@
         "abbreviation": "NYJ",
         "name": "New York Jets"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392287",
@@ -134,9 +134,9 @@
         "abbreviation": "PIT",
         "name": "Pittsburgh Steelers"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392288",
@@ -151,9 +151,9 @@
         "abbreviation": "WSH",
         "name": "Washington Commanders"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392290",
@@ -168,9 +168,9 @@
         "abbreviation": "GB",
         "name": "Green Bay Packers"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392289",
