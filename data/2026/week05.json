@@ -50,7 +50,7 @@
         "name": "Tennessee Titans"
       },
       "status": "live",
-      "away_score": 19,
+      "away_score": 25,
       "home_score": 3
     },
     {
@@ -68,7 +68,7 @@
       },
       "status": "live",
       "away_score": 21,
-      "home_score": 7
+      "home_score": 10
     },
     {
       "id": "1392284",
@@ -101,7 +101,7 @@
         "name": "New Orleans Saints"
       },
       "status": "live",
-      "away_score": 13,
+      "away_score": 20,
       "home_score": 13
     },
     {
@@ -135,7 +135,7 @@
         "name": "Pittsburgh Steelers"
       },
       "status": "live",
-      "away_score": 16,
+      "away_score": 19,
       "home_score": 24
     },
     {
@@ -170,7 +170,7 @@
       },
       "status": "live",
       "away_score": 7,
-      "home_score": 20
+      "home_score": 23
     },
     {
       "id": "1392289",
