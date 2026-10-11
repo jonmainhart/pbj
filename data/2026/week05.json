@@ -151,7 +151,7 @@
         "abbreviation": "WSH",
         "name": "Washington Commanders"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 27,
       "home_score": 27
     },
@@ -221,7 +221,7 @@
       },
       "status": "live",
       "away_score": 7,
-      "home_score": 0
+      "home_score": 7
     },
     {
       "id": "1392293",
