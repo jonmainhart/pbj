@@ -186,7 +186,7 @@
         "name": "Los Angeles Chargers"
       },
       "status": "live",
-      "away_score": 20,
+      "away_score": 23,
       "home_score": 17
     },
     {
@@ -203,7 +203,7 @@
         "name": "Arizona Cardinals"
       },
       "status": "live",
-      "away_score": 38,
+      "away_score": 45,
       "home_score": 14
     },
     {
@@ -220,7 +220,7 @@
         "name": "Seattle Seahawks"
       },
       "status": "live",
-      "away_score": 21,
+      "away_score": 29,
       "home_score": 26
     },
     {
