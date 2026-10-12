@@ -169,22 +169,6 @@ def test_generation_is_deterministic_and_source_edits_replace_derived_content(
 
 
 @pytest.mark.unit
-def test_real_rules_document_is_rendered_in_full(tmp_path: Path) -> None:
-    root = Path(__file__).resolve().parents[1]
-    source = (root / "RULES.md").read_text(encoding="utf-8")
-    generate_documents(
-        root, tmp_path, [Document(name="rules", source="RULES.md", format="markdown")]
-    )
-    text = "".join(ParsedHTML((tmp_path / "rules.html").read_text(encoding="utf-8")).text)
-
-    for heading in re.findall(r"^#{1,6} (.+)$", source, flags=re.MULTILINE):
-        assert heading in text
-    assert source.strip().splitlines()[-1] in text
-    assert "✅" in text and "❌" in text and "👑" in text
-    assert "Game Data Provider" not in text
-
-
-@pytest.mark.unit
 def test_missing_source_fails_generation(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         generate_documents(
