@@ -62,8 +62,6 @@ jobs:
                   frontend = build = True
               elif path.endswith('.md') or path in {'LICENSE', 'CNAME', 'manifest.webmanifest'}:
                   build = True
-                  if path in {'RULES.md', 'LICENSE', 'LICENSE-SCOPE.md', 'LEGAL.md'}:
-                      frontend = True
               elif path.startswith('data/') and path.endswith(('.json', '.csv')):
                   pass
               elif path.startswith('assets/'):
