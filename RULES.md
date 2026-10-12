@@ -12,21 +12,21 @@
 
 If players have the same number of wins, the closest Monday night total breaks the tie.
 
-- Guess the combined score of both teams.
+- Guess the combined total points scored on Monday night.
 - Going over or under makes no difference.
 - Multiple Monday games? Add all their scores together.
 - Still tied? Players share that place, including first or last.
 
-Final standings are official after every game finishes.
+Weekly winners and rankings are determined once all games are final.
 
 ## Elimination
-**You're eliminated when there's no possible way to finish tied for the most wins.**
+**You appear below the ``Eliminated`` line when there's no possible way for you to finish tied for the most wins.**
 
 PBJ considers everyone's remaining picks, not just how many games are left.
 
 **Example:** You're one win behind the leader, but you both picked the same teams in every remaining game. You're eliminated because you can't gain any ground.
 
-- You can be eliminated with games still remaining.
+- You can be eliminated with games still remaining, even after a single game.
 - The Monday tiebreaker doesn't save you from elimination.
 - Potential NFL ties aren't considered in elimination calculations.
 - Your picks still count toward your final record and season standings.
