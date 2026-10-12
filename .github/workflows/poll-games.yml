@@ -82,22 +82,6 @@ jobs:
             "${{ steps.week.outputs.week }}" \
             --provider balldontlie
 
-      - name: Commit game updates
-        if: steps.poll.outputs.poll == 'true'
-        shell: bash
-        run: |
-          week_file="data/${{ steps.week.outputs.season }}/week$(printf '%02d' '${{ steps.week.outputs.week }}').json"
-
-          if git diff --quiet -- "$week_file"; then
-            echo "No game updates to commit."
-            exit 0
-          fi
-
-          git add "$week_file"
-
-          git commit \
-            -m "Update week ${{ steps.week.outputs.week }} games"
-
       - name: Score week
         if: steps.poll.outputs.poll == 'true'
         shell: bash
@@ -106,22 +90,6 @@ jobs:
             "${{ steps.week.outputs.season }}" \
             "${{ steps.week.outputs.week }}"
 
-      - name: Commit scoring updates
-        if: steps.poll.outputs.poll == 'true'
-        shell: bash
-        run: |
-          week_file="data/${{ steps.week.outputs.season }}/week$(printf '%02d' '${{ steps.week.outputs.week }}').json"
-
-          if git diff --quiet -- "$week_file"; then
-            echo "No scoring updates to commit."
-            exit 0
-          fi
-
-          git add "$week_file"
-
-          git commit \
-            -m "Score week ${{ steps.week.outputs.week }}"
-
       - name: Aggregate season
         if: steps.poll.outputs.poll == 'true'
         shell: bash
@@ -129,21 +97,29 @@ jobs:
           python scripts/aggregate_season.py \
             "${{ steps.week.outputs.season }}"
 
-      - name: Commit season updates
+      - name: Commit game results and scoring
         if: steps.poll.outputs.poll == 'true'
         shell: bash
         run: |
+          week_file="data/${{ steps.week.outputs.season }}/week$(printf '%02d' '${{ steps.week.outputs.week }}').json"
           season_file="data/${{ steps.week.outputs.season }}/season.json"
 
-          if git diff --quiet -- "$season_file"; then
-            echo "No season updates to commit."
+          git add "$week_file" "$season_file"
+
+          if git diff --cached --quiet; then
+            echo "No game results or scoring changes to commit."
             exit 0
+          else
+            status=$?
           fi
 
-          git add "$season_file"
+          if [ "$status" -ne 1 ]; then
+            echo "Checking staged changes failed with exit code $status."
+            exit "$status"
+          fi
 
           git commit \
-            -m "Update ${{ steps.week.outputs.season }} season standings"
+            -m "Update week ${{ steps.week.outputs.week }} game results and scoring"
 
       - name: Push updates
         if: steps.poll.outputs.poll == 'true'
