@@ -49,9 +49,9 @@
         "abbreviation": "ATL",
         "name": "Atlanta Falcons"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392298",
@@ -66,9 +66,9 @@
         "abbreviation": "CLE",
         "name": "Cleveland Browns"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392299",
@@ -83,9 +83,9 @@
         "abbreviation": "IND",
         "name": "Indianapolis Colts"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392300",
@@ -100,9 +100,9 @@
         "abbreviation": "NE",
         "name": "New England Patriots"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392301",
@@ -117,9 +117,9 @@
         "abbreviation": "NYG",
         "name": "New York Giants"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392302",
@@ -134,9 +134,9 @@
         "abbreviation": "PHI",
         "name": "Philadelphia Eagles"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392303",
@@ -151,9 +151,9 @@
         "abbreviation": "TB",
         "name": "Tampa Bay Buccaneers"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392304",
