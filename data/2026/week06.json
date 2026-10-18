@@ -84,7 +84,7 @@
         "name": "Indianapolis Colts"
       },
       "status": "live",
-      "away_score": 23,
+      "away_score": 26,
       "home_score": 20
     },
     {
@@ -152,7 +152,7 @@
         "name": "Tampa Bay Buccaneers"
       },
       "status": "live",
-      "away_score": 16,
+      "away_score": 19,
       "home_score": 16
     },
     {
@@ -168,9 +168,9 @@
         "abbreviation": "LAR",
         "name": "Los Angeles Rams"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392305",
