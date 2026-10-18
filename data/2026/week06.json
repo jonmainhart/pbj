@@ -50,7 +50,7 @@
         "name": "Atlanta Falcons"
       },
       "status": "live",
-      "away_score": 14,
+      "away_score": 21,
       "home_score": 7
     },
     {
@@ -85,7 +85,7 @@
       },
       "status": "live",
       "away_score": 0,
-      "home_score": 10
+      "home_score": 13
     },
     {
       "id": "1392300",
@@ -118,7 +118,7 @@
         "name": "New York Giants"
       },
       "status": "live",
-      "away_score": 0,
+      "away_score": 3,
       "home_score": 10
     },
     {
