@@ -50,7 +50,7 @@
         "name": "Atlanta Falcons"
       },
       "status": "live",
-      "away_score": 28,
+      "away_score": 31,
       "home_score": 7
     },
     {
@@ -84,7 +84,7 @@
         "name": "Indianapolis Colts"
       },
       "status": "live",
-      "away_score": 13,
+      "away_score": 20,
       "home_score": 13
     },
     {
@@ -152,7 +152,7 @@
         "name": "Tampa Bay Buccaneers"
       },
       "status": "live",
-      "away_score": 3,
+      "away_score": 10,
       "home_score": 16
     },
     {
