@@ -1,6 +1,14 @@
 name: Deploy AWS shadow
 
 on:
+  push:
+    branches: [test/aws-upgrade]
+    paths:
+      - .github/workflows/deploy-aws-shadow.yml
+      - aws/**
+      - src/pbj/**
+      - scripts/**
+      - pyproject.toml
   workflow_dispatch:
 
 permissions:
@@ -46,17 +54,11 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-2
-      - name: Deploy code and configure runtime
+      - name: Deploy code
         run: |
           aws lambda wait function-updated-v2 --function-name "$FUNCTION_NAME"
           aws lambda update-function-code \
             --function-name "$FUNCTION_NAME" \
             --zip-file fileb://build/aws-shadow/deployment.zip \
             --query '{LastUpdateStatus:LastUpdateStatus}'
-          aws lambda wait function-updated-v2 --function-name "$FUNCTION_NAME"
-          aws lambda update-function-configuration \
-            --function-name "$FUNCTION_NAME" \
-            --runtime python3.14 \
-            --handler lambda_function.lambda_handler \
-            --query '{Runtime:Runtime,Handler:Handler,LastUpdateStatus:LastUpdateStatus}'
           aws lambda wait function-updated-v2 --function-name "$FUNCTION_NAME"
