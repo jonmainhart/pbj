@@ -1,32 +1,20 @@
-name: Deploy AWS shadow
+name: Deploy AWS application
 
 on:
-  push:
-    branches: [test/aws-upgrade]
-    paths:
-      - .github/workflows/deploy-aws-shadow.yml
-      - aws/**
-      - src/pbj/**
-      - scripts/**
-      - pyproject.toml
-  workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
-
-concurrency:
-  group: deploy-aws-shadow
-  cancel-in-progress: false
 
 jobs:
   deploy:
     if: github.ref == 'refs/heads/test/aws-upgrade'
     runs-on: ubuntu-latest
-    environment: aws-staging
+    environment: pbj-aws-deploy
     timeout-minutes: 20
     env:
       AWS_REGION: us-east-2
-      FUNCTION_NAME: pbj-shadow-smoke
+      FUNCTION_NAME: pbj-processor
     steps:
       - uses: actions/checkout@v7
         with:
@@ -34,17 +22,13 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
-      - name: Install test dependencies
-        run: python -m pip install '.[dev]'
-      - name: Run Python tests
-        run: python -m pytest
       - name: Build deployment archive
         run: |
-          mkdir -p build/aws-shadow/package/scripts
-          python -m pip install . --target build/aws-shadow/package --no-compile --only-binary=:all:
-          cp aws/lambda_function.py build/aws-shadow/package/
-          cp scripts/{__init__,aggregate_season,generate_manifest,import_picks,score_week,select_active_week,should_poll,update_games}.py build/aws-shadow/package/scripts/
-          cd build/aws-shadow/package
+          mkdir -p build/aws/package/scripts
+          python -m pip install . --target build/aws/package --no-compile --only-binary=:all:
+          cp aws/lambda_function.py build/aws/package/
+          cp scripts/{__init__,aggregate_season,generate_manifest,import_picks,score_week,select_active_week,should_poll,update_games}.py build/aws/package/scripts/
+          cd build/aws/package
           # Import from the staged artifact, outside the source tree.
           python -c 'from lambda_function import lambda_handler; assert lambda_handler({}, None)["status"] == "ok"'
           zip -qr ../deployment.zip . -x '*/__pycache__/*' '*.pyc'
@@ -59,6 +43,11 @@ jobs:
           aws lambda wait function-updated-v2 --function-name "$FUNCTION_NAME"
           aws lambda update-function-code \
             --function-name "$FUNCTION_NAME" \
-            --zip-file fileb://build/aws-shadow/deployment.zip \
+            --zip-file fileb://build/aws/deployment.zip \
             --query '{LastUpdateStatus:LastUpdateStatus}'
           aws lambda wait function-updated-v2 --function-name "$FUNCTION_NAME"
+      - name: Verify deployed artifact
+        run: |
+          expected=$(openssl dgst -sha256 -binary build/aws/deployment.zip | openssl base64 -A)
+          actual=$(aws lambda get-function --function-name "$FUNCTION_NAME" --query 'Configuration.CodeSha256' --output text)
+          test "$actual" = "$expected"

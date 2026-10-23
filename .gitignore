@@ -95,3 +95,12 @@ yarn-error.log*
 data/raw
 assets/img/logo-full.png
 assets/img/logo-transparent-full.png
+
+# Terraform local artifacts (commit .terraform.lock.hcl)
+**/.terraform/
+/aws/terraform/bootstrap.zip
+*.tfstate
+*.tfstate.*
+*.tfplan
+/aws/terraform/tfplan
+crash.log

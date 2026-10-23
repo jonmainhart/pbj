@@ -1,0 +1,52 @@
+name: AWS infrastructure and deployment
+
+on:
+  push:
+    branches: [test/aws-upgrade]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pbj-aws-deployment
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    if: github.ref == 'refs/heads/test/aws-upgrade'
+    uses: ./.github/workflows/quality.yml
+  terraform:
+    needs: quality
+    runs-on: ubuntu-latest
+    environment: pbj-aws-infra
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.17.0'
+          terraform_wrapper: false
+      - name: Validate Terraform
+        run: bash aws/check-terraform.sh
+      - name: Build initial placeholder
+        run: python aws/bootstrap.py
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+      - name: Initialize remote state
+        run: terraform -chdir=aws/terraform init -input=false -lockfile=readonly
+      - name: Save and review plan
+        run: |
+          terraform -chdir=aws/terraform plan -input=false -lock-timeout=5m -out=tfplan
+          terraform -chdir=aws/terraform show -json tfplan | python aws/check-plan.py
+      - name: Apply saved plan
+        run: terraform -chdir=aws/terraform apply -input=false -lock-timeout=5m tfplan
+  deploy:
+    needs: terraform
+    uses: ./.github/workflows/deploy-aws.yml
+    secrets: inherit
