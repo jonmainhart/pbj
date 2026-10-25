@@ -25,12 +25,14 @@ jobs:
       - name: Build deployment archive
         run: |
           mkdir -p build/aws/package/scripts
-          python -m pip install . --target build/aws/package --no-compile --only-binary=:all:
+          python -m pip install ".[aws]" \
+            --target build/aws/package \
+            --no-compile --only-binary=:all:
           cp aws/lambda_function.py build/aws/package/
           cp scripts/{__init__,aggregate_season,generate_manifest,import_picks,score_week,select_active_week,should_poll,update_games}.py build/aws/package/scripts/
           cd build/aws/package
           # Import from the staged artifact, outside the source tree.
-          python -c 'from lambda_function import lambda_handler; assert lambda_handler({}, None)["status"] == "ok"'
+          python -c 'import boto3, botocore; from lambda_function import lambda_handler; assert lambda_handler({}, None)["status"] == "ok"'
           zip -qr ../deployment.zip . -x '*/__pycache__/*' '*.pyc'
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.3.0

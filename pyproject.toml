@@ -12,6 +12,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+aws = [
+    "boto3>=1.37.32,<2",
+    "boto3-stubs[s3,lambda]>=1.37.32,<2"
+]
 docs = [
     "markdown-it-py>=3,<5",
 ]
