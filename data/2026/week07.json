@@ -49,9 +49,9 @@
         "abbreviation": "ATL",
         "name": "Atlanta Falcons"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392312",
@@ -66,9 +66,9 @@
         "abbreviation": "TEN",
         "name": "Tennessee Titans"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392313",
@@ -83,9 +83,9 @@
         "abbreviation": "MIN",
         "name": "Minnesota Vikings"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392314",
@@ -100,9 +100,9 @@
         "abbreviation": "NYJ",
         "name": "New York Jets"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392315",
@@ -117,9 +117,9 @@
         "abbreviation": "CAR",
         "name": "Carolina Panthers"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392316",
@@ -134,9 +134,9 @@
         "abbreviation": "BAL",
         "name": "Baltimore Ravens"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392317",
@@ -151,9 +151,9 @@
         "abbreviation": "HOU",
         "name": "Houston Texans"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392318",
