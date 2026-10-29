@@ -4,6 +4,10 @@ import json
 import sys
 
 ALLOWED = {
+    "aws_iam_role.scheduler",
+    "aws_iam_role_policy.scheduler",
+    "aws_scheduler_schedule.create_week",
+    "aws_scheduler_schedule.poll_games",
     "aws_iam_role.processor",
     "aws_iam_role_policy.processor",
     "aws_cloudwatch_log_group.processor",

@@ -13,6 +13,12 @@ GUARD = Path(__file__).resolve().parents[1] / "aws" / "check-plan.py"
 @pytest.mark.parametrize(
     ("address", "actions", "accepted"),
     [
+        ("aws_scheduler_schedule.create_week", ["create"], True),
+        ("aws_scheduler_schedule.poll_games", ["update"], True),
+        ("aws_iam_role.scheduler", ["create"], True),
+        ("aws_iam_role_policy.scheduler", ["create"], True),
+        ("aws_scheduler_schedule.poll_games", ["delete"], False),
+        ("aws_scheduler_schedule.other", ["create"], False),
         ("aws_lambda_function.processor", ["create"], True),
         ("aws_lambda_function.processor", ["update"], True),
         ("aws_lambda_function.processor", ["no-op"], True),

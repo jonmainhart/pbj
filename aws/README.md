@@ -42,8 +42,10 @@ aws lambda invoke \
   --region us-east-2 \
   --function-name pbj-processor \
   --cli-binary-format raw-in-base64-out \
-  --payload '{"action":"score_week","season":2026,"week":6}' \
+  --payload '{"action":"score_week","season":2026,"week":7}' \
   /tmp/pbj-result.json
+
+cat /tmp/pbj-result.json
 ```
 
 `write` defaults to `false`. Set `"write": true` to persist changed results using conditional S3 writes. An empty event (`{}`) runs the import smoke test.

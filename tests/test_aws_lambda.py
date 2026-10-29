@@ -8,6 +8,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 from aws import lambda_function as handler
+from aws import storage
 from scripts.score_week import score_week_file
 
 
@@ -15,7 +16,8 @@ from scripts.score_week import score_week_file
 def s3(monkeypatch):
     client = Mock()
     monkeypatch.setenv("PBJ_DATA_BUCKET", "pbj-data-jm26")
-    monkeypatch.setattr(handler, "_s3_client", lambda: client)
+    monkeypatch.setenv("PBJ_DATA_PREFIX", "data/")
+    monkeypatch.setattr(storage, "client", lambda: client)
     return client
 
 

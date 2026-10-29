@@ -24,15 +24,25 @@ jobs:
           python-version: '3.14'
       - name: Build deployment archive
         run: |
-          mkdir -p build/aws/package/scripts
+          mkdir -p build/aws/package/scripts build/aws/package/aws
           python -m pip install ".[aws]" \
             --target build/aws/package \
             --no-compile --only-binary=:all:
           cp aws/lambda_function.py build/aws/package/
+          cp aws/{__init__,processing,storage}.py build/aws/package/aws/
           cp scripts/{__init__,aggregate_season,generate_manifest,import_picks,score_week,select_active_week,should_poll,update_games}.py build/aws/package/scripts/
           cd build/aws/package
           # Import from the staged artifact, outside the source tree.
-          python -c 'import boto3, botocore; from lambda_function import lambda_handler; assert lambda_handler({}, None)["status"] == "ok"'
+          python - <<'PY'
+          from pathlib import Path
+          import boto3, botocore, lambda_function, pbj
+          from aws import processing, storage
+          from scripts import update_games
+
+          modules = (lambda_function, processing, storage, pbj, update_games)
+          assert all(Path(module.__file__).is_relative_to(Path.cwd()) for module in modules)
+          assert lambda_function.lambda_handler({}, None)["status"] == "ok"
+          PY
           zip -qr ../deployment.zip . -x '*/__pycache__/*' '*.pyc'
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.3.0
