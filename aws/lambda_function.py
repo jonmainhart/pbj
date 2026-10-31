@@ -38,14 +38,19 @@ def lambda_handler(event: Any, context: Any) -> dict[str, Any]:
         }
 
     action = event.get("action")
-    if action not in ("create_week", "poll_games", "score_week", "update_week"):
-        raise ValueError("action must be create_week, poll_games, score_week, or update_week")
+    if action not in ("create_week", "poll_games", "score_week", "update_week", "import_picks"):
+        raise ValueError("Unsupported action")
     season = event.get("season")
-    if season is None and action not in ("score_week", "update_week"):
+    if season is None and action not in ("score_week", "update_week", "import_picks"):
         configured = os.environ.get("PBJ_SEASON")
         season = int(configured) if configured else None
     if type(season) is not int or not 1900 <= season <= 9999:
         raise ValueError("season must be an integer from 1900 to 9999")
+    if action == "import_picks":
+        week = event.get("week")
+        if type(week) is not int or not 1 <= week <= 18:
+            raise ValueError("week must be an integer from 1 to 18")
+        return processing.import_existing_week(season, week)
     if action == "score_week":
         week = event.get("week")
         write = event.get("write", False)

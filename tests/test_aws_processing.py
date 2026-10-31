@@ -73,6 +73,7 @@ def setup(monkeypatch, tmp_path):
     s3 = S3()
     monkeypatch.setenv("PBJ_DATA_BUCKET", "pbj-data-jm26")
     monkeypatch.setenv("PBJ_DATA_PREFIX", "data/")
+    monkeypatch.setenv("PBJ_INPUT_PREFIX", "incoming/")
     monkeypatch.setenv("PBJ_SEASON", "2026")
     monkeypatch.setenv("PBJ_WEEK1_CREATION_DATE", "2026-09-08")
     monkeypatch.setattr(storage, "client", lambda: s3)
@@ -87,6 +88,144 @@ def setup(monkeypatch, tmp_path):
 
 def invoke(action, **kwargs):
     return handler.lambda_handler({"action": action, **kwargs}, None)
+
+
+CSV_KEY = "incoming/2026/week06.csv"
+WEEK_KEY = "data/2026/week06.json"
+SEASON_KEY = "data/2026/season.json"
+CSV = b"Commissioner export\nNAME,NE SEA,TIEBREAKER,CORRECT\nTest Player,SEA,27,99\nBob,NE,30,99\n"
+
+
+def seed_import(s3):
+    s3.seed(WEEK_KEY, weekly())
+    s3.objects[CSV_KEY] = CSV
+
+
+def import_week():
+    return invoke("import_picks", season=2026, week=6)
+
+
+def test_import_real_pipeline_and_duplicate(setup, tmp_path):
+    from scripts import aggregate_season, import_picks, score_week
+
+    s3, provider = setup
+    seed_import(s3)
+    previous = {**weekly(), "week": 5}
+    path = tmp_path / "week05.json"
+    path.write_text(json.dumps(previous))
+    score_week.score_week_file(path, 2026, 5)
+    s3.objects["data/2026/week05.json"] = path.read_bytes()
+    path = tmp_path / "week06.json"
+    path.write_text(json.dumps(weekly()))
+    csv_path = path.with_suffix(".csv")
+    csv_path.write_bytes(CSV)
+    import_picks.import_picks_file(path, csv_path, 2026, 6)
+    score_week.score_week_file(path, 2026, 6)
+    aggregate_season.aggregate_season_files(2026, tmp_path)
+
+    assert import_week()["written"] == [WEEK_KEY, SEASON_KEY]
+    updated = s3.data(WEEK_KEY)
+    assert updated == json.loads(path.read_bytes())
+    assert s3.data(SEASON_KEY) == json.loads((tmp_path / "season.json").read_bytes())
+    assert updated["games"] == weekly()["games"]
+    assert updated["lock_time"] == weekly()["lock_time"]
+    assert updated["custom"] == weekly()["custom"]
+    assert updated["players"][0] == {**weekly()["players"][0], "id": "test-player"}
+    assert updated["players"][1]["picks"] == {"game-1": "NE"}
+    assert updated["players"][1]["tiebreaker"] == 30
+    assert s3.data(SEASON_KEY)["weeks_scored"] == [5, 6]
+    assert s3.objects[CSV_KEY] == CSV
+    assert not csv_path.exists()
+    writes = s3.writes.copy()
+    assert import_week()["written"] == []
+    assert s3.writes == writes
+    provider.get_week.assert_not_called()
+
+
+@pytest.mark.parametrize("content", [None, b"bad", b"NAME,NE SEA,TIEBREAKER\nBob,BUF,30\n", b""])
+def test_import_missing_or_invalid_csv_preserves_s3(setup, content):
+    s3, _ = setup
+    seed_import(s3)
+    s3.seed(SEASON_KEY, {"original": True})
+    if content is None:
+        del s3.objects[CSV_KEY]
+    else:
+        s3.objects[CSV_KEY] = content
+    original = s3.objects.copy()
+    with pytest.raises((ValueError, ClientError)):
+        import_week()
+    assert s3.objects == original
+    assert s3.writes == []
+
+
+def test_import_requires_existing_week(setup):
+    s3, _ = setup
+    s3.objects[CSV_KEY] = CSV
+    with pytest.raises(ClientError, match="NoSuchKey"):
+        import_week()
+    assert s3.writes == []
+
+
+def test_import_correction_rebuilds_standings(setup):
+    s3, _ = setup
+    seed_import(s3)
+    import_week()
+    original = s3.data(SEASON_KEY)
+    corrected = CSV.replace(b"Bob,NE,30", b"Bob,SEA,27")
+    s3.objects[CSV_KEY] = corrected
+    assert import_week()["written"] == [WEEK_KEY, SEASON_KEY]
+    assert s3.data(SEASON_KEY) != original
+    assert s3.data(WEEK_KEY)["players"][1]["picks"] == {"game-1": "SEA"}
+    assert s3.objects[CSV_KEY] == corrected
+    assert import_week()["written"] == []
+
+
+@pytest.mark.parametrize("key", [WEEK_KEY, SEASON_KEY])
+@pytest.mark.parametrize("code", ["PreconditionFailed", "ConditionalRequestConflict"])
+def test_import_conditional_conflict_and_recovery(setup, monkeypatch, key, code):
+    s3, _ = setup
+    seed_import(s3)
+    put = s3.put_object
+
+    def conflict(**kwargs):
+        if kwargs["Key"] == key:
+            s3.seed(key, {**s3.data(key), "concurrent": True} if key == WEEK_KEY else {})
+            raise error(code)
+        put(**kwargs)
+
+    monkeypatch.setattr(s3, "put_object", conflict)
+    with pytest.raises(ClientError, match=code):
+        import_week()
+    if key == WEEK_KEY:
+        assert s3.writes == []
+        assert s3.data(key)["concurrent"]
+        assert SEASON_KEY not in s3.objects
+    else:
+        assert s3.writes == [WEEK_KEY]
+    monkeypatch.setattr(s3, "put_object", put)
+    assert import_week()["written"] == ([WEEK_KEY, SEASON_KEY] if key == WEEK_KEY else [SEASON_KEY])
+    assert s3.objects[CSV_KEY] == CSV
+    assert import_week()["written"] == []
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [("season", None), ("season", True), ("week", None), ("week", True), ("week", 19)],
+)
+def test_import_requires_explicit_valid_target(setup, field, value):
+    s3, _ = setup
+    with pytest.raises(ValueError, match=field):
+        invoke("import_picks", **{"season": 2026, "week": 6, field: value})
+    assert s3.objects == {}
+
+
+def test_import_uses_configured_private_prefix(setup, monkeypatch):
+    s3, _ = setup
+    seed_import(s3)
+    monkeypatch.setenv("PBJ_INPUT_PREFIX", "private/commissioner")
+    s3.objects["private/commissioner/2026/week06.csv"] = s3.objects.pop(CSV_KEY)
+    assert import_week()["written"] == [WEEK_KEY, SEASON_KEY]
+    assert all(key.startswith("data/") and key.endswith(".json") for key in s3.writes)
 
 
 def test_create_manifest_and_duplicate(setup):

@@ -22,6 +22,7 @@ provider "aws" {
 locals {
   data_bucket         = "pbj-data-jm26"
   data_prefix         = "data/"
+  input_prefix        = "incoming/"
   api_key_parameter   = "/pbj/balldontlie-api-key"
   season              = 2026
   week1_creation_date = "2026-09-08"
@@ -70,6 +71,11 @@ resource "aws_iam_role_policy" "processor" {
       },
       {
         Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "arn:aws:s3:::${local.data_bucket}/${local.input_prefix}*/week*.csv"
+      },
+      {
+        Effect   = "Allow"
         Action   = ["s3:GetObject", "s3:PutObject"]
         Resource = "arn:aws:s3:::${local.data_bucket}/${local.data_prefix}*"
       }
@@ -91,6 +97,7 @@ resource "aws_lambda_function" "processor" {
     variables = {
       PBJ_DATA_BUCKET         = local.data_bucket
       PBJ_DATA_PREFIX         = local.data_prefix
+      PBJ_INPUT_PREFIX        = local.input_prefix
       PBJ_API_KEY_PARAMETER   = local.api_key_parameter
       PBJ_SEASON              = tostring(local.season)
       PBJ_WEEK1_CREATION_DATE = local.week1_creation_date

@@ -51,3 +51,10 @@ cat /tmp/pbj-result.json
 `write` defaults to `false`. Set `"write": true` to persist changed results using conditional S3 writes. An empty event (`{}`) runs the import smoke test.
 
 Check the invocation response for `FunctionError`; a successful CLI exit does not guarantee successful Lambda execution.
+
+## Manual commissioner CSV import
+
+Original commissioner CSVs are uploaded to `incoming/<season>/weekNN.csv`.
+The Lambda `import_picks` action processes the specified season and week.
+The original CSV remains in S3 for retries and corrections. Automatic CSV
+processing is not yet enabled.

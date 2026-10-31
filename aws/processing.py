@@ -4,7 +4,7 @@ import json
 import os
 import re
 from datetime import UTC, date, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 from zoneinfo import ZoneInfo
 
@@ -13,7 +13,7 @@ from pbj.active_week import select_active_week
 from pbj.polling import should_poll
 from pbj.providers.balldontlie import BALLDONTLIEProvider
 from pbj.week_data import load_games
-from scripts import aggregate_season, generate_manifest, score_week, update_games
+from scripts import aggregate_season, generate_manifest, import_picks, score_week, update_games
 
 WEEK_FILE = re.compile(r"(\d{4})/week(0[1-9]|1[0-8])\.json$")
 
@@ -64,6 +64,54 @@ def scheduled_week(timestamp: datetime) -> int:
     if first.weekday() != 1 or days % 7:
         raise ValueError("Creation dates must match the recurring Tuesday schedule")
     return days // 7 + 1
+
+
+def import_existing_week(season: int, week: int) -> dict[str, object]:
+    """Adapt the commissioner import pipeline to private S3 input and JSON output."""
+    config = storage.StorageConfig.from_environment()
+    s3 = storage.client()
+    name = f"{season}/week{week:02d}.json"
+    key = config.key(name)
+    original = storage.read(s3, config, key, required=True)
+    if original is None:
+        raise FileNotFoundError(key)
+    csv_key = str(PurePosixPath(os.environ["PBJ_INPUT_PREFIX"]) / f"{season}/week{week:02d}.csv")
+    csv = storage.read(s3, config, csv_key, required=True)
+    if csv is None:
+        raise FileNotFoundError(csv_key)
+    season_key = config.key(f"{season}/season.json")
+    season_original = storage.read(s3, config, season_key)
+    written: list[str] = []
+    with TemporaryDirectory() as directory:
+        season_dir = Path(directory) / str(season)
+        season_dir.mkdir()
+        path = season_dir / f"week{week:02d}.json"
+        path.write_bytes(original.content)
+        for other_key in storage.list_keys(s3, config):
+            other_name = other_key.removeprefix(config.prefix)
+            if (
+                other_key != key
+                and other_name.startswith(f"{season}/")
+                and WEEK_FILE.fullmatch(other_name)
+            ):
+                snapshot = storage.read(s3, config, other_key, required=True)
+                if snapshot is None:
+                    raise FileNotFoundError(other_key)
+                (season_dir / Path(other_name).name).write_bytes(snapshot.content)
+        csv_path = path.with_suffix(".csv")
+        csv_path.write_bytes(csv.content)
+        import_picks.import_picks_file(path, csv_path, season, week)
+        score_week.score_week_file(path, season, week)
+        # Finish all local validation before publishing either document.
+        aggregate_season.aggregate_season_files(season, season_dir)
+        if storage.publish(s3, config, key, path.read_bytes(), original):
+            written.append(key)
+        # Rebuilding on every invocation also repairs a previous partial publication.
+        if storage.publish(
+            s3, config, season_key, (season_dir / "season.json").read_bytes(), season_original
+        ):
+            written.append(season_key)
+    return dict(status="ok", action="import_picks", season=season, week=week, written=written)
 
 
 def process(
