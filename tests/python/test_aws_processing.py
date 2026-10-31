@@ -12,7 +12,8 @@ from botocore.exceptions import ClientError
 from aws import lambda_function as handler
 from aws import processing, storage
 from pbj.week_data import load_games
-from tests.test_aws_lambda import weekly
+
+from .test_aws_lambda import weekly
 
 
 def error(code):

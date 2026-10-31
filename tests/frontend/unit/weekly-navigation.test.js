@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { openEntity, crossNavigate, closeEntity } from "../../../assets/weekly-navigation.js";
+import { openEntity, crossNavigate, closeEntity } from "../../../site/assets/weekly-navigation.js";
 
 const playerA = { kind: "player", id: "a", pageScroll: 320, cardScroll: 140 };
 const playerB = { kind: "player", id: "b", pageScroll: 0, cardScroll: 0 };

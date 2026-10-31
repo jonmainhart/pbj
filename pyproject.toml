@@ -30,9 +30,11 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/python"]
+pythonpath = ["."]
 addopts = [
     "-ra",
+    "--import-mode=importlib",
     "--strict-markers",
 ]
 markers = [
@@ -72,7 +74,8 @@ warn_unreachable = true
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = "tests.*"
+# tests/python is the package root now that tests/ has no package marker.
+module = "python.*"
 disallow_untyped_defs = false
 disallow_untyped_calls = false
 disallow_incomplete_defs = false

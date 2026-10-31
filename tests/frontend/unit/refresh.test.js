@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { initializeAutoRefresh } from "../../../assets/refresh.js";
+import { initializeAutoRefresh } from "../../../site/assets/refresh.js";
 
 test("refresh runs each minute only when visible, and on returning to the page", (t) => {
     let intervalCallback;

@@ -32,7 +32,7 @@ not protect.
 ## Artwork and Branding
 
 Original PBJ artwork, logos, icons, and other graphical branding located under
-`assets/img/` are excluded from the Apache License 2.0.
+`site/assets/img/` are excluded from the Apache License 2.0.
 
 No license is granted to copy, modify, redistribute, publish, or otherwise
 reuse this artwork or branding without prior permission from the applicable

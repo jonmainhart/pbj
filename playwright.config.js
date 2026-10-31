@@ -1,9 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
+import { existsSync } from "node:fs";
 
 const baseURL = "http://127.0.0.1:8000";
+const python = process.env.PBJ_PYTHON
+    || (existsSync(".venv/bin/python") ? ".venv/bin/python" : "python3");
+const pythonCommand = `'${python.replaceAll("'", "'\\''")}'`;
 
 export default defineConfig({
-    globalSetup: "./tests/frontend/browser/global-setup.js",
     testDir: "./tests/frontend/browser",
     fullyParallel: true,
     forbidOnly: Boolean(process.env.CI),
@@ -22,8 +25,8 @@ export default defineConfig({
         },
     ],
     webServer: {
-        command: "python3 -m http.server 8000 --bind 127.0.0.1",
+        command: `${pythonCommand} -m scripts.build_site && ${pythonCommand} -m http.server 8000 --bind 127.0.0.1 --directory build/site`,
         url: baseURL,
-        reuseExistingServer: !process.env.CI,
+        reuseExistingServer: false,
     },
 });

@@ -65,7 +65,7 @@ jobs:
                   build = True
               elif path.startswith('data/') and path.endswith(('.json', '.csv')):
                   pass
-              elif path.startswith('assets/'):
+              elif path.startswith('site/'):
                   frontend = build = True
               else:
                   # Unknown configuration/source types must not bypass validation.
@@ -101,7 +101,7 @@ jobs:
         run: |
           ruff check .
           ruff format --check .
-          mypy src scripts tests
+          mypy src scripts tests/python
           pytest
       - uses: actions/setup-node@v6
         if: steps.changes.outputs.frontend == 'true'
@@ -120,5 +120,5 @@ jobs:
         if: steps.changes.outputs.build == 'true'
         run: |
           python -m scripts.generate_documents
-          pytest -q tests/test_generate_documents.py tests/test_build_site.py tests/test_legal_notice.py
+          pytest -q tests/python/test_generate_documents.py tests/python/test_build_site.py tests/python/test_legal_notice.py
           python -m scripts.build_site

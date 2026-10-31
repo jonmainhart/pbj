@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatAccuracy } from "../../../assets/format.js";
-import { displayName, getPlayerName, rememberPlayerNames } from "../../../assets/players.js";
+import { formatAccuracy } from "../../../site/assets/format.js";
+import { displayName, getPlayerName, rememberPlayerNames } from "../../../site/assets/players.js";
 
 test("Win % distinguishes unavailable values from zero and rounds to one decimal", () => {
     for (const [input, expected] of [

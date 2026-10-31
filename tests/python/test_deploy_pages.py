@@ -6,7 +6,7 @@ from pathlib import Path
 
 def test_pages_concurrency_queues_runs_without_canceling_pending_deployments() -> None:
     workflow = (
-        Path(__file__).resolve().parents[1] / ".github/workflows/deploy-pages.yml"
+        Path(__file__).resolve().parents[2] / ".github/workflows/deploy-pages.yml"
     ).read_text(encoding="utf-8")
     concurrency = re.search(r"^concurrency:\n((?:[ \t]+[^\n]*\n)+)", workflow, re.MULTILINE)
     assert concurrency is not None

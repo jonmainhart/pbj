@@ -72,7 +72,9 @@ def generate_documents(
 def main() -> None:
     """Generate project document assets for local serving or deployment."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output-dir", type=Path, default=ROOT / "assets" / "documents")
+    parser.add_argument(
+        "--output-dir", type=Path, default=ROOT / "build" / "site" / "assets" / "documents"
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     generate_documents(ROOT, args.output_dir, DOCUMENTS)

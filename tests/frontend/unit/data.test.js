@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fetchWeek, fetchSeason, fetchAvailableWeeks } from "../../../assets/data.js";
+import { fetchWeek, fetchSeason, fetchAvailableWeeks } from "../../../site/assets/data.js";
 
 const cases = [
     { name: "week", load: () => fetchWeek(2026, 4), path: "./data/2026/week04.json",

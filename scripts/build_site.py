@@ -9,10 +9,8 @@ from pathlib import Path
 from scripts.generate_documents import DOCUMENTS, generate_documents
 
 ROOT = Path(__file__).resolve().parents[1]
+SITE_FILES = ("index.html", "manifest.webmanifest", "CNAME")
 PUBLIC_FILES = (
-    "index.html",
-    "manifest.webmanifest",
-    "CNAME",
     "RULES.md",
     "LICENSE",
     "LICENSE-SCOPE.md",
@@ -30,10 +28,13 @@ def build_site(source_root: Path, output_dir: Path) -> None:
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True)
+    site_root = source_root / "site"
+    for name in SITE_FILES:
+        shutil.copy2(site_root / name, output_dir / name)
     for name in PUBLIC_FILES:
         shutil.copy2(source_root / name, output_dir / name)
     shutil.copytree(
-        source_root / "assets",
+        site_root / "assets",
         output_dir / "assets",
         ignore=shutil.ignore_patterns("documents", ".DS_Store"),
     )

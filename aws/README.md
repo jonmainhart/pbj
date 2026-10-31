@@ -29,7 +29,7 @@ GitHub Actions handles `terraform apply`. Terraform-managed resources should not
 ## Local checks
 
 ```bash
-python -m pytest tests/test_aws_lambda.py
+python -m pytest tests/python/test_aws_lambda.py
 ```
 
 ## Lambda testing

@@ -58,6 +58,8 @@ Generated weekly data is stored under `data/<season>/`.
 
 ## Development
 
+Website source lives in `site/`, Python tests in `tests/python/`, and frontend tests in `tests/frontend/`. Canonical documents and working data remain at the repository root. Build the public preview with `python -m scripts.build_site`, then serve it with `python -m http.server 8000 --bind 127.0.0.1 --directory build/site`.
+
 See [DEVELOPMENT.md](DEVELOPMENT.md) for architecture, data ownership, scoring implementation, game-data providers, automation, testing, and local development.
 
 ## License

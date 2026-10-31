@@ -90,11 +90,11 @@ yarn-error.log*
 *.zip
 
 # PROJECT FILES
-/assets/documents/
+/site/assets/documents/
 *.numbers
 data/raw
-assets/img/logo-full.png
-assets/img/logo-transparent-full.png
+site/assets/img/logo-full.png
+site/assets/img/logo-transparent-full.png
 
 # Terraform local artifacts (commit .terraform.lock.hcl)
 **/.terraform/

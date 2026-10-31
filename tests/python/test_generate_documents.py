@@ -49,7 +49,7 @@ def test_registered_license_documents_render_complete_canonical_sources(
     source_name: str,
     asset_name: str,
 ) -> None:
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     source = (root / source_name).read_bytes()
 
     generate_documents(root, tmp_path, DOCUMENTS)

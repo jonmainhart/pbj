@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadDocument } from "../../../assets/documents.js";
+import { loadDocument } from "../../../site/assets/documents.js";
 
 for (const path of ["./assets/documents/rules.html", "./assets/documents/example.html"]) {
     test(`document loader returns trusted HTML from ${path}`, async (t) => {

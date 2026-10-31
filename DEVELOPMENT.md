@@ -219,7 +219,7 @@ Manual workflow dispatch can still be used when needed.
 
 ## Frontend
 
-The frontend consists of `index.html`, `assets/style.css`, and native JavaScript modules under `assets/`, with no frontend framework or JavaScript build step. Python generates document HTML when preparing the static site.
+The frontend consists of `site/index.html`, `site/assets/style.css`, and native JavaScript modules under `site/assets/`, with no frontend framework or JavaScript build step. Python generates document HTML when preparing the static site.
 
 Phone usability is the primary design requirement.
 
@@ -282,21 +282,16 @@ The footer Rules, Apache 2.0, Data & artwork terms, and Legal Notice controls op
 
 `scripts/generate_documents.py` generates dashboard presentation from the complete repository source documents:
 
-- `RULES.md` → `assets/documents/rules.html`, rendered using CommonMark.
-- `LICENSE` → `assets/documents/license.html`, rendered as escaped plain-text paragraphs.
-- `LICENSE-SCOPE.md` → `assets/documents/license-scope.html`, rendered using CommonMark.
-- `LEGAL.md` → `assets/documents/legal.html`, rendered using CommonMark.
+- `RULES.md` → `build/site/assets/documents/rules.html`, rendered using CommonMark.
+- `LICENSE` → `build/site/assets/documents/license.html`, rendered as escaped plain-text paragraphs.
+- `LICENSE-SCOPE.md` → `build/site/assets/documents/license-scope.html`, rendered using CommonMark.
+- `LEGAL.md` → `build/site/assets/documents/legal.html`, rendered using CommonMark.
 
-Raw HTML is disabled for Markdown sources. Plain-text rendering preserves wording and paragraph boundaries, joining source lines within each paragraph so the browser wraps text naturally at the available width. Keep `LICENSE` as extensionless plain text. Edit the source documents rather than maintaining presentation copies; generated `assets/documents/` files are ignored by Git.
+Raw HTML is disabled for Markdown sources. Plain-text rendering preserves wording and paragraph boundaries, joining source lines within each paragraph so the browser wraps text naturally at the available width. Keep `LICENSE` as extensionless plain text. Edit the source documents rather than maintaining presentation copies; generated `build/site/assets/documents/` files are ignored by Git.
 
 The sticky card header uses a document's opening `<h1>` when present, otherwise its configured title. The header keeps Close usable while long documents scroll.
 
-Before serving the repository locally, generate the documents:
-
-    python -m scripts.generate_documents
-    python -m http.server 8000 --bind 127.0.0.1
-
-Regenerate after editing `RULES.md`, `LICENSE`, `LICENSE-SCOPE.md`, or `LEGAL.md`. To preview the production artifact instead:
+Build and serve the public artifact locally. Rebuild after editing website source, public JSON, or canonical documents:
 
     python -m scripts.build_site
     python -m http.server 8000 --bind 127.0.0.1 --directory build/site
@@ -309,8 +304,8 @@ The builder replaces `build/site` with public root files, assets, dashboard JSON
 
 Optional announcements are read from:
 
-- `assets/announcement-top.txt`
-- `assets/announcement-bottom.txt`
+- `site/assets/announcement-top.txt`
+- `site/assets/announcement-bottom.txt`
 
 Empty files remain hidden. Existing line breaks are preserved.
 
@@ -339,7 +334,7 @@ For `should_poll.py`, exit code 0 means polling is required and exit code 1 mean
 Before committing Python changes:
 
     pytest
-    mypy src scripts tests
+    mypy src scripts tests/python
     ruff check .
     ruff format --check .
 
@@ -361,9 +356,9 @@ Frontend tests use Node's built-in test runner for deterministic logic and Playw
     node --test tests/frontend/unit/*.test.js
     npx playwright test
 
-Unit tests live in `tests/frontend/unit`; browser tests and synthetic JSON fixtures live in `tests/frontend/browser`. Browser tests serve the real static site and intercept data requests, independently of production participant data. Playwright starts Python's static server on `127.0.0.1:8000` and can reuse an existing local server outside CI.
+Unit tests live in `tests/frontend/unit`; browser tests and synthetic JSON fixtures live in `tests/frontend/browser`. Python tests live in `tests/python/`; `pytest` discovers them by default and `pytest -m smoke` selects smoke tests. Browser tests serve the generated `build/site/` artifact and intercept data requests, independently of production participant data. Playwright starts Python's static server on `127.0.0.1:8000` and requires that port to be free.
 
-Playwright's global setup regenerates document assets before every run, including when reusing a server. It uses `.venv/bin/python` when present, otherwise `python3`; set `PBJ_PYTHON` to select another interpreter with the document dependencies installed. Shared document behavior is tested with synthetic HTML, and browser tests also load the real generated Rules, license, and scope assets. License checks cover complete paragraph content, natural wrapping, phone and desktop scrolling, horizontal overflow, usable Close controls, and restoration of trigger focus and dashboard state. Python tests cover escaping, paragraph boundaries, and regeneration from source documents while preserving the original files in the published artifact.
+Playwright's web server command runs `scripts.build_site` exactly once before starting the HTTP server. A failed build prevents server startup; a successful build replaces stale output and regenerates documents from root-level canonical sources. It uses `.venv/bin/python` when present, otherwise `python3`; set `PBJ_PYTHON` to select another interpreter with the document dependencies installed. Shared document behavior is tested with synthetic HTML, and browser tests also load the real generated Rules, license, and scope assets. License checks cover complete paragraph content, natural wrapping, phone and desktop scrolling, horizontal overflow, usable Close controls, and restoration of trigger focus and dashboard state. Python tests cover escaping, paragraph boundaries, and regeneration from source documents while preserving the original files in the published artifact.
 
 Responsive card browser tests in `tests/frontend/browser/card-layout.spec.js` cover single-column ordering across phone, intermediate, and desktop widths; the 799px/800px layout boundary; 16 compact picks without wrapping; status indicators; preservation of expanded details; and season-card content.
 
@@ -373,7 +368,7 @@ Automated browser checks use desktop Chromium, including narrow-screen functiona
 
 PBJ Dashboard source code and project documentation are licensed under the Apache License 2.0.
 
-Pool participant data under `data/` and PBJ artwork and branding under `assets/img/` are expressly excluded from the Apache license. Third-party sports data, team identifiers, trademarks, and other third-party material are not licensed by this project.
+Pool participant data under `data/` and PBJ artwork and branding under `site/assets/img/` are expressly excluded from the Apache license. Third-party sports data, team identifiers, trademarks, and other third-party material are not licensed by this project.
 
 See [LICENSE](LICENSE) and [LICENSE-SCOPE.md](LICENSE-SCOPE.md) for details.
 
@@ -407,7 +402,7 @@ ESLint 10 supports Node 20.19+, Node 22.13+, and Node 24+, matching
 `package.json`: `^20.19.0 || ^22.13.0 || >=24`. CI uses Node 22.
 
 - Python source/tests: verify the installed PBJ source matches the checkout, then
-  `ruff check .`, `ruff format --check .`, `mypy src scripts tests`, and `pytest -m smoke -q`.
+  `ruff check .`, `ruff format --check .`, `mypy src scripts tests/python`, and `pytest -m smoke -q`.
 - JavaScript source/tests: `npm run lint` and `npm run test:unit`.
 - QA configuration/workflows: both groups; mixed changes use their union.
 - JSON: parse staged blobs, including partially staged JSON; skip deleted files.

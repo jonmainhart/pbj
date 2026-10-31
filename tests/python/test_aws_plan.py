@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-GUARD = Path(__file__).resolve().parents[1] / "aws" / "check-plan.py"
+GUARD = Path(__file__).resolve().parents[2] / "aws" / "check-plan.py"
 
 
 @pytest.mark.parametrize(

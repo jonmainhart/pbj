@@ -17,17 +17,23 @@ def test_site_contains_public_assets_and_json_but_not_private_or_development_fil
 ) -> None:
     source = tmp_path / "source"
     source.mkdir()
+    (source / "site").mkdir()
     for name in ("index.html", "CNAME", "manifest.webmanifest", "LICENSE", "LICENSE-SCOPE.md"):
-        (source / name).write_text(name, encoding="utf-8")
+        directory = (
+            source / "site" if name in {"index.html", "CNAME", "manifest.webmanifest"} else source
+        )
+        (directory / name).write_text(name, encoding="utf-8")
     for name, content in LICENSE_SOURCES.items():
         (source / name).write_text(content, encoding="utf-8")
     (source / "LEGAL.md").write_text("# Legal Notice\n\nFixture legal notice.\n", encoding="utf-8")
     (source / "RULES.md").write_text("# Rules\n\nCanonical rules.\n", encoding="utf-8")
     (source / "BALLDONTLIE.key").write_text("secret", encoding="utf-8")
-    (source / "assets").mkdir()
-    (source / "assets" / "app.js").write_text("// public", encoding="utf-8")
-    (source / "assets" / "documents").mkdir()
-    (source / "assets" / "documents" / "rules.html").write_text("stale", encoding="utf-8")
+    (source / "site" / "private.csv").write_text("private", encoding="utf-8")
+    (source / "site" / "BALLDONTLIE.key").write_text("secret", encoding="utf-8")
+    (source / "site" / "assets").mkdir()
+    (source / "site" / "assets" / "app.js").write_text("// public", encoding="utf-8")
+    (source / "site" / "assets" / "documents").mkdir()
+    (source / "site" / "assets" / "documents" / "rules.html").write_text("stale", encoding="utf-8")
     (source / "data" / "2026").mkdir(parents=True)
     (source / "data" / "available-weeks.json").write_text("{}", encoding="utf-8")
     (source / "data" / "2026" / "week01.json").write_text("{}", encoding="utf-8")
@@ -52,21 +58,26 @@ def test_site_contains_public_assets_and_json_but_not_private_or_development_fil
         assert (output / name).read_text(encoding="utf-8") == content
         assert (source / name).read_text(encoding="utf-8") == content
     assert not (output / "BALLDONTLIE.key").exists()
+    assert not (output / "private.csv").exists()
     assert not (output / "data" / "2026" / "week01.csv").exists()
     assert not (output / "data" / "raw").exists()
-    assert (source / "assets" / "documents" / "rules.html").read_text() == "stale"
+    assert (source / "site" / "assets" / "documents" / "rules.html").read_text() == "stale"
 
 
 def test_build_replaces_stale_site_files_on_rebuild(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.mkdir()
+    (source / "site").mkdir()
     for name in ("index.html", "CNAME", "manifest.webmanifest", "LICENSE", "LICENSE-SCOPE.md"):
-        (source / name).touch()
+        directory = (
+            source / "site" if name in {"index.html", "CNAME", "manifest.webmanifest"} else source
+        )
+        (directory / name).touch()
     for name, content in LICENSE_SOURCES.items():
         (source / name).write_text(content, encoding="utf-8")
     (source / "LEGAL.md").write_text("# Legal Notice\n\nFixture legal notice.\n", encoding="utf-8")
     (source / "RULES.md").write_text("# Rules\n", encoding="utf-8")
-    (source / "assets").mkdir()
+    (source / "site" / "assets").mkdir()
     (source / "data").mkdir()
     output = tmp_path / "site"
     output.mkdir()

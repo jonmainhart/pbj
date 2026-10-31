@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { orderGames, groupGamePicks } from "../../../assets/game-view-model.js";
+import { orderGames, groupGamePicks } from "../../../site/assets/game-view-model.js";
 import { game, player } from "../browser/fixtures.js";
 
 test("unfinished games precede finals with kickoff order retained within each group", () => {

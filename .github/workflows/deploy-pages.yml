@@ -4,15 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - index.html
-      - assets/**
+      - site/**
       - data/**.json
       - RULES.md
       - LICENSE
       - LICENSE-SCOPE.md
       - LEGAL.md
-      - CNAME
-      - manifest.webmanifest
       - scripts/build_site.py
       - scripts/generate_documents.py
       - pyproject.toml
