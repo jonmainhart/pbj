@@ -146,7 +146,7 @@ resource "aws_iam_role_policy" "scheduler" {
 
 resource "aws_scheduler_schedule" "create_week" {
   name                         = "pbj-create-week"
-  state                        = "DISABLED"
+  state                        = "ENABLED"
   schedule_expression          = "cron(0 8 ? * TUE *)"
   schedule_expression_timezone = "America/New_York"
   flexible_time_window { mode = "OFF" }
@@ -156,7 +156,7 @@ resource "aws_scheduler_schedule" "create_week" {
     input    = jsonencode({ action = "create_week", scheduled_time = "<aws.scheduler.scheduled-time>" })
     retry_policy {
       maximum_event_age_in_seconds = 300
-      maximum_retry_attempts       = 0
+      maximum_retry_attempts       = 2
     }
   }
   depends_on = [aws_iam_role_policy.scheduler]
@@ -165,7 +165,7 @@ resource "aws_scheduler_schedule" "create_week" {
 
 resource "aws_scheduler_schedule" "poll_games" {
   name                         = "pbj-poll-games"
-  state                        = "DISABLED"
+  state                        = "ENABLED"
   schedule_expression          = "cron(2/5 * * * ? *)"
   schedule_expression_timezone = "America/New_York"
   flexible_time_window { mode = "OFF" }
