@@ -38,10 +38,10 @@ def lambda_handler(event: Any, context: Any) -> dict[str, Any]:
         }
 
     action = event.get("action")
-    if action not in ("create_week", "poll_games", "score_week"):
-        raise ValueError("action must be create_week, poll_games, or score_week")
+    if action not in ("create_week", "poll_games", "score_week", "update_week"):
+        raise ValueError("action must be create_week, poll_games, score_week, or update_week")
     season = event.get("season")
-    if season is None and action != "score_week":
+    if season is None and action not in ("score_week", "update_week"):
         configured = os.environ.get("PBJ_SEASON")
         season = int(configured) if configured else None
     if type(season) is not int or not 1900 <= season <= 9999:
@@ -63,6 +63,10 @@ def lambda_handler(event: Any, context: Any) -> dict[str, Any]:
         if scheduled.tzinfo is None:
             raise ValueError("scheduled_time must be timezone-aware")
     week = None
+    if action == "update_week":
+        week = event.get("week")
+        if type(week) is not int or not 1 <= week <= 18:
+            raise ValueError("week must be an integer from 1 to 18")
     if action == "create_week":
         if scheduled is not None:
             if "week" in event:

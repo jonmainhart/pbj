@@ -125,6 +125,95 @@ def test_skip_unnecessary_polling(setup):
     assert s3.data("data/2026/season.json")["weeks_scored"] == []
 
 
+@pytest.mark.parametrize("picks", [True, False])
+def test_manual_update_after_polling_window(setup, monkeypatch, picks):
+    s3, provider = setup
+    key = "data/2026/week07.json"
+    data = {**weekly(), "week": 7}
+    data["games"][0]["status"] = "scheduled"
+    data["games"][0]["away_score"] = None
+    data["games"][0]["home_score"] = None
+    if not picks:
+        del data["players"]
+    s3.seed(key, data)
+    monkeypatch.setattr(processing, "now", lambda: datetime(2026, 11, 1, tzinfo=UTC))
+    assert not invoke("poll_games")["fetched"]
+    provider.get_week.assert_not_called()
+    s3.writes.clear()
+
+    polling = Mock(side_effect=AssertionError("manual update must bypass should_poll"))
+    monkeypatch.setattr(processing, "should_poll", polling)
+    result = invoke("update_week", season=2026, week=7)
+    assert result == {
+        "status": "ok",
+        "action": "update_week",
+        "season": 2026,
+        "week": 7,
+        "fetched": True,
+        "scored": picks,
+        "written": [key, "data/2026/season.json"] if picks else [key],
+    }
+    provider.get_week.assert_called_once_with(season=2026, week=7)
+    polling.assert_not_called()
+    updated = s3.data(key)
+    assert updated["games"][0]["status"] == "final"
+    assert updated["games"][0]["home_score"] == 17
+    assert {k: v for k, v in updated.items() if k not in ("games", "results")} == {
+        k: v for k, v in data.items() if k not in ("games", "results")
+    }
+    season = s3.data("data/2026/season.json")
+    assert season["weeks_scored"] == ([7] if picks else [])
+    if picks:
+        assert updated["results"]["players"][0]["wins"] == 1
+        assert season["players"][0]["wins"] == 1
+    s3.writes.clear()
+    assert invoke("update_week", season=2026, week=7)["written"] == []
+    assert s3.writes == []
+
+
+def test_manual_update_targets_requested_week(setup, monkeypatch):
+    s3, provider = setup
+    for week in (6, 7):
+        data = {**weekly(), "week": week}
+        data["games"][0]["status"] = "live"
+        s3.seed(f"data/2026/week{week:02d}.json", data)
+    original = s3.objects["data/2026/week06.json"]
+    selection = Mock(side_effect=AssertionError("manual update must bypass active selection"))
+    monkeypatch.setattr(processing, "select_active_week", selection)
+    assert invoke("update_week", season=2026, week=7)["week"] == 7
+    provider.get_week.assert_called_once_with(season=2026, week=7)
+    selection.assert_not_called()
+    assert s3.objects["data/2026/week06.json"] == original
+
+
+def test_manual_update_requires_existing_week(setup):
+    s3, provider = setup
+    s3.seed("data/2026/week06.json", weekly())
+    with pytest.raises(FileNotFoundError, match="week07"):
+        invoke("update_week", season=2026, week=7)
+    assert "data/2026/week07.json" not in s3.objects
+    assert s3.writes == []
+    provider.get_week.assert_not_called()
+
+
+@pytest.mark.parametrize("week", [None, True, 0, 19, "7", 7.0])
+def test_manual_update_requires_valid_week(setup, week):
+    s3, provider = setup
+    with pytest.raises(ValueError, match="week"):
+        invoke("update_week", season=2026, **({} if week is None else {"week": week}))
+    assert s3.writes == []
+    provider.get_week.assert_not_called()
+
+
+@pytest.mark.parametrize("season", [None, True, 0, 10000, "2026", 2026.0])
+def test_manual_update_requires_explicit_valid_season(setup, season):
+    s3, provider = setup
+    with pytest.raises(ValueError, match="season"):
+        invoke("update_week", week=7, **({} if season is None else {"season": season}))
+    assert s3.writes == []
+    provider.get_week.assert_not_called()
+
+
 def test_partial_failure_recovers_without_polling(setup):
     s3, provider = setup
     data = weekly()
@@ -143,14 +232,15 @@ def test_partial_failure_recovers_without_polling(setup):
     provider.get_week.assert_called_once()
 
 
-def test_week_conflict_never_publishes_standings(setup):
+@pytest.mark.parametrize("action", ["poll_games", "update_week"])
+def test_week_conflict_never_publishes_standings(setup, action):
     s3, _ = setup
     data = weekly()
     data["games"][0]["status"] = "live"
     s3.seed("data/2026/week06.json", data)
     s3.fail = "data/2026/week06.json"
     with pytest.raises(ClientError):
-        invoke("poll_games")
+        invoke(action, season=2026, week=6)
     assert s3.writes == []
 
 
@@ -166,7 +256,8 @@ def test_create_conflict_then_retry_repairs_manifest(setup):
     assert s3.data("data/available-weeks.json") == {"2026": [1]}
 
 
-def test_real_concurrent_write_rejects_stale_week(setup):
+@pytest.mark.parametrize("action", ["poll_games", "update_week"])
+def test_real_concurrent_write_rejects_stale_week(setup, action):
     s3, provider = setup
     data = weekly()
     data["games"][0]["status"] = "live"
@@ -181,11 +272,11 @@ def test_real_concurrent_write_rejects_stale_week(setup):
 
     provider.get_week.side_effect = fetch
     with pytest.raises(ClientError, match="PreconditionFailed"):
-        invoke("poll_games")
+        invoke(action, season=2026, week=6)
     assert s3.data(key)["commissioner_note"] == "concurrent edit"
     assert "data/2026/season.json" not in s3.objects
     provider.get_week.side_effect = None
-    invoke("poll_games")
+    invoke(action, season=2026, week=6)
     assert s3.data(key)["commissioner_note"] == "concurrent edit"
 
 

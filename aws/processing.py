@@ -95,11 +95,11 @@ def process(
         snapshots: dict[str, storage.Snapshot] = {}
         # Manifest generation needs filenames, not historical season contents.
         for name in names:
-            if action == "poll_games" and not name.startswith(f"{season}/"):
+            if action in ("poll_games", "update_week") and not name.startswith(f"{season}/"):
                 continue
             path = root / name
             path.parent.mkdir(exist_ok=True)
-            if action == "poll_games" and path.parent == season_dir:
+            if action in ("poll_games", "update_week") and path.parent == season_dir:
                 snapshot = storage.read(s3, config, config.key(name))
                 if snapshot is None:
                     raise RuntimeError(f"Source disappeared: {name}; retry")
@@ -132,10 +132,14 @@ def process(
             weeks = {
                 int(path.stem[4:]): load_games(path) for path in season_dir.glob("week??.json")
             }
-            week = select_active_week(weeks)
+            if action == "update_week":
+                if week not in weeks:
+                    raise FileNotFoundError(f"{season}/week{week:02d}.json")
+            else:
+                week = select_active_week(weeks)
             season_key = config.key(f"{season}/season.json")
             season_original = storage.read(s3, config, season_key)
-            if week is not None and should_poll(weeks[week], now()):
+            if week is not None and (action == "update_week" or should_poll(weeks[week], now())):
                 path = season_dir / f"week{week:02d}.json"
                 update_games.update_week(path, season, week, provider())
                 fetched = True
