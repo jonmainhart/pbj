@@ -1,4 +1,4 @@
-"""Fail closed on deletion, replacement, or resources outside the PBJ allowlist."""
+"""Guard PBJ plans, allowing only exact tainted admin-config object recovery."""
 
 import json
 import sys
@@ -60,6 +60,27 @@ for change in plan.get("resource_changes", []):
     if change["mode"] == "data":
         continue
     actions = change["change"]["actions"]
-    if change["address"] not in ALLOWED or actions not in (["no-op"], ["create"], ["update"]):
+    details = change["change"]
+    unknown = details.get("after_unknown")
+    tainted_admin_config = (
+        change["address"] == "aws_s3_object.admin_config"
+        and change["mode"] == "managed"
+        and actions == ["delete", "create"]
+        and change.get("action_reason") == "replace_because_tainted"
+        and all(
+            isinstance(details.get(side), dict)
+            and details[side].get("bucket") == "pbj-preview-jm26"
+            and details[side].get("key") == "assets/admin-config.json"
+            for side in ("before", "after")
+        )
+        and isinstance(unknown, dict)
+        and all(unknown.get(field, False) is False for field in ("bucket", "key"))
+    )
+    if change["address"] not in ALLOWED or (
+        actions not in (["no-op"], ["create"], ["update"]) and not tainted_admin_config
+    ):
         sys.exit(f"Rejected {change['address']}: {actions}")
-print("Plan accepted: only allowed creates and in-place updates")
+print(
+    "Plan accepted: allowlisted no-ops, creates, in-place updates, and verified "
+    "tainted admin configuration object replacement only"
+)

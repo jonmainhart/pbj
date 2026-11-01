@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -43,6 +44,17 @@ GUARD = Path(__file__).resolve().parents[2] / "aws" / "check-plan.py"
                 (["delete", "create"], False),
             )
         ],
+        *[
+            ("aws_s3_object.admin_config", actions, accepted)
+            for actions, accepted in (
+                (["create"], True),
+                (["update"], True),
+                (["no-op"], True),
+                (["delete"], False),
+                (["delete", "create"], False),
+                (["create", "delete"], False),
+            )
+        ],
         ("aws_s3_object.picks", ["create"], False),
         ("aws_iam_role.power_user", ["update"], False),
         ("aws_iam_role_policy.processor", ["delete"], False),
@@ -58,3 +70,93 @@ def test_plan_guard(address: str, actions: list[str], accepted: bool) -> None:
         [sys.executable, str(GUARD)], input=json.dumps(plan), text=True, capture_output=True
     )
     assert (result.returncode == 0) is accepted, result.stderr
+
+
+@pytest.mark.parametrize(
+    ("path", "value", "accepted"),
+    [
+        ((), None, True),
+        (("address",), "aws_lambda_function.processor", False),
+        (("address",), "aws_s3_object.other", False),
+        (("mode",), "__missing__", False),
+        (("action_reason",), "replace_because_cannot_update", False),
+        (("action_reason",), "replace_by_request", False),
+        (("action_reason",), "__missing__", False),
+        (("action_reason",), None, False),
+        (("change", "actions"), ["create", "delete"], False),
+        (("change", "actions"), ["delete"], False),
+        (("change", "actions"), ["delete", "create", "read"], False),
+        *[
+            (("change", side, field), value, False)
+            for side in ("before", "after")
+            for field, value in (
+                ("bucket", "other-bucket"),
+                ("key", "assets/other.json"),
+                ("bucket", None),
+                ("key", None),
+                ("bucket", "__missing__"),
+                ("key", "__missing__"),
+            )
+        ],
+        *[
+            (("change", field), value, False)
+            for field in ("before", "after", "after_unknown")
+            for value in (None, True, "__missing__")
+        ],
+        (("change", "after_unknown", "bucket"), True, False),
+        (("change", "after_unknown", "key"), True, False),
+        (("change", "after_unknown", "key"), {}, False),
+        (("change", "after_unknown"), {"bucket": False, "key": False}, True),
+    ],
+)
+def test_tainted_admin_config_replacement(path, value, accepted):
+    change: dict[str, Any] = {
+        "address": "aws_s3_object.admin_config",
+        "mode": "managed",
+        "action_reason": "replace_because_tainted",
+        "change": {
+            "actions": ["delete", "create"],
+            "before": {"bucket": "pbj-preview-jm26", "key": "assets/admin-config.json"},
+            "after": {"bucket": "pbj-preview-jm26", "key": "assets/admin-config.json"},
+            "after_unknown": {},
+        },
+    }
+    if path:
+        parent = change
+        for field in path[:-1]:
+            parent = parent[field]
+        if value == "__missing__":
+            del parent[path[-1]]
+        else:
+            parent[path[-1]] = value
+    result = subprocess.run(  # noqa: S603 - fixed interpreter and repository script
+        [sys.executable, str(GUARD)],
+        input=json.dumps({"resource_changes": [change]}),
+        text=True,
+        capture_output=True,
+    )
+    assert (result.returncode == 0) is accepted, result.stderr
+    if accepted:
+        assert "tainted admin configuration object replacement" in result.stdout
+
+
+def test_admin_config_delete_permission_is_object_scoped():
+    policy = json.loads((GUARD.parent / "iam/terraform-user.json").read_text())
+    matching = [
+        statement
+        for statement in policy["Statement"]
+        if statement["Resource"] == "arn:aws:s3:::pbj-preview-jm26/assets/admin-config.json"
+    ]
+    assert len(matching) == 1
+    assert set(matching[0]["Action"]) == {
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:GetObjectTagging",
+        "s3:DeleteObject",
+    }
+    for statement in policy["Statement"]:
+        if "s3:DeleteObject" in statement["Action"]:
+            assert statement["Resource"] in {
+                "arn:aws:s3:::pbj-preview-jm26/assets/admin-config.json",
+                "arn:aws:s3:::pbj-data-jm26/terraform/pbj.tfstate.tflock",
+            }

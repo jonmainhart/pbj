@@ -172,7 +172,7 @@
     },
     {
       "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:PutObject", "s3:GetObjectTagging"],
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:GetObjectTagging", "s3:DeleteObject"],
       "Resource": "arn:aws:s3:::pbj-preview-jm26/assets/admin-config.json"
     },
     {
@@ -212,7 +212,8 @@
         "cognito-idp:UpdateUserPoolDomain",
         "cognito-idp:CreateManagedLoginBranding",
         "cognito-idp:DescribeManagedLoginBranding",
-        "cognito-idp:UpdateManagedLoginBranding"
+        "cognito-idp:UpdateManagedLoginBranding",
+        "cognito-idp:DescribeManagedLoginBrandingByClient"
       ],
       "Resource": "arn:aws:cognito-idp:us-east-2:ACCOUNT_ID:userpool/ADMIN_POOL_ID"
     },
