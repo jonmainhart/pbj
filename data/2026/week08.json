@@ -32,9 +32,9 @@
         "abbreviation": "BUF",
         "name": "Buffalo Bills"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392325",
@@ -49,9 +49,9 @@
         "abbreviation": "CIN",
         "name": "Cincinnati Bengals"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392326",
@@ -66,9 +66,9 @@
         "abbreviation": "DAL",
         "name": "Dallas Cowboys"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392327",
@@ -83,9 +83,9 @@
         "abbreviation": "DET",
         "name": "Detroit Lions"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392328",
@@ -100,9 +100,9 @@
         "abbreviation": "NYJ",
         "name": "New York Jets"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392329",
@@ -117,9 +117,9 @@
         "abbreviation": "PIT",
         "name": "Pittsburgh Steelers"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392330",
@@ -134,9 +134,9 @@
         "abbreviation": "TB",
         "name": "Tampa Bay Buccaneers"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392331",
@@ -151,9 +151,9 @@
         "abbreviation": "JAX",
         "name": "Jacksonville Jaguars"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392332",
