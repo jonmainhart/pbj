@@ -20,6 +20,39 @@ ALLOWED = {
     "aws_cloudwatch_log_group.processor",
     "aws_lambda_function.processor",
 }
+ALLOWED.update(
+    {
+        f"{kind}.admin"
+        for kind in (
+            "aws_cognito_user_pool",
+            "aws_cognito_managed_login_branding",
+            "aws_cognito_resource_server",
+            "aws_cognito_user_pool_client",
+            "aws_cognito_user_pool_domain",
+            "aws_iam_role",
+            "aws_iam_role_policy",
+            "aws_cloudwatch_log_group",
+            "aws_lambda_function",
+            "aws_apigatewayv2_api",
+            "aws_apigatewayv2_authorizer",
+            "aws_apigatewayv2_integration",
+            "aws_apigatewayv2_stage",
+            "aws_lambda_permission",
+            "aws_cloudfront_function",
+        )
+    }
+)
+ALLOWED.add("aws_s3_object.admin_config")
+ALLOWED.update(
+    f'aws_apigatewayv2_route.admin["{route}"]'
+    for route in (
+        "GET /schedules",
+        "GET /weeks/{season}/{week}",
+        "POST /weeks/{season}/{week}/validate",
+        "PUT /weeks/{season}/{week}/draft",
+        "POST /weeks/{season}/{week}/submit",
+    )
+)
 plan = json.load(sys.stdin)
 if plan.get("errored") or plan.get("complete") is False:
     sys.exit("Incomplete or errored plan")

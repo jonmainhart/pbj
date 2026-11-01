@@ -101,7 +101,7 @@ jobs:
         run: |
           ruff check .
           ruff format --check .
-          mypy src scripts tests/python
+          mypy src scripts aws tests/python
           pytest
       - uses: actions/setup-node@v6
         if: steps.changes.outputs.frontend == 'true'
@@ -112,6 +112,7 @@ jobs:
         if: steps.changes.outputs.frontend == 'true'
         run: |
           npm ci
+          npm run build:admin
           npm run lint
           npm run test:unit
           npx playwright install --with-deps chromium

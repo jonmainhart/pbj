@@ -11,7 +11,7 @@ def test_staged_artifact_imports_its_own_modules(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[2]
     shutil.copy(root / "aws/lambda_function.py", tmp_path)
     (tmp_path / "aws").mkdir()
-    for name in ("__init__", "processing", "storage"):
+    for name in ("__init__", "processing", "storage", "admin", "admin_csv"):
         shutil.copy(root / f"aws/{name}.py", tmp_path / "aws")
     shutil.copytree(
         root / "scripts", tmp_path / "scripts", ignore=shutil.ignore_patterns("__pycache__")

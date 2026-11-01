@@ -129,3 +129,100 @@ separate. New-account S3 credits/Free Tier eligibility depend on account age and
 plan; do not assume the older 12-month allowance applies. See current
 [CloudFront allowances](https://aws.amazon.com/cloudfront/faqs/) and
 [S3 pricing and credits](https://aws.amazon.com/s3/pricing/).
+
+## Commissioner portal (local implementation; review before deployment)
+
+`/admin/` is a vanilla JavaScript editor with locally compiled Tailwind v4 CSS:
+`npm ci && npm run build:admin`, then `python -m scripts.build_site`. The public
+dashboard retains its existing CSS and processing. The static shell contains no
+commissioner CSVs or credentials. Terraform writes public OAuth/API settings to
+`assets/admin-config.json` in the preview bucket; the static uploader does not
+manage that file. GitHub Pages remains production and has no admin configuration.
+
+The preview adds one Cognito Essentials pool (managed login v2), one public SPA
+client, one JWT-protected HTTP API, and `pbj-admin`. Accounts are provisioned
+individually; self-registration is disabled. Authorization-code + S256 PKCE uses
+a random, checked state and a ten-minute verifier window. Access tokens remain in
+memory, expire after 30 minutes, and are never saved to localStorage. Reloading
+requires sign-in again. Every API route requires `pbj/admin`; Lambda additionally
+checks the gateway-verified access-token type, subject, scope and client ID.
+The pool is dedicated to commissioners: every provisioned account has admin
+access. Disabling a user does not invalidate an already issued JWT immediately;
+allow its remaining 30-minute lifetime when revoking access.
+
+After reviewing and deploying Terraform, obtain `admin_user_pool_id` and
+`preview_hostname` outputs. A separately authorized operator with
+`cognito-idp:AdminCreateUser` for that pool provisions each commissioner:
+
+```bash
+aws cognito-idp admin-create-user --region us-east-2 \
+  --user-pool-id POOL_ID --username commissioner@example.com \
+  --user-attributes Name=email,Value=commissioner@example.com \
+  --desired-delivery-mediums EMAIL
+```
+
+Cognito sends the temporary password; the user changes it at managed login.
+Only the preview `/admin/` HTTPS URL is an allowed callback/logout URL. No client
+secret, new IAM user, server, or database is required. Deploy both Lambdas using
+the reviewed branch workflow before opening the portal; their initial Terraform
+bootstrap intentionally cannot process requests.
+
+Before deployment, update the existing IAM users from `aws/iam/` (replace
+`ACCOUNT_ID`, `ADMIN_POOL_ID`, `ADMIN_API_ID` and existing preview IDs). Infra
+permissions add the admin role/PassRole, Lambda and log group, scoped API Gateway
+management, Cognito configuration/branding, the CloudFront rewrite function, and
+one static config object. For initial creation only, pool/API IDs are unknown:
+use account/region-scoped `userpool/*` and `/apis/*`, then narrow them to outputs.
+The deploy user adds code-update/read permissions for **only** `pbj-admin`.
+Neither deployment user gains commissioner CSV access. Account provisioning is
+an operator permission and is intentionally absent from these workflow policies.
+The admin execution role reads schedules, conditionally writes private CSVs,
+and invokes only `pbj-processor`; it cannot publish JSON. Existing scheduler and
+processor settings are retained. The plan guard permits only named additions
+and still rejects deletion/replacement.
+
+Private CSV paths in `pbj-data-jm26`:
+
+- Draft: `incoming/<season>/drafts/weekNN.csv` (can contain validation errors).
+- Submitted importer input: `incoming/<season>/weekNN.csv`.
+- Published processor output: `data/<season>/weekNN.json`.
+
+Saving never invokes the processor. Draft ETags implement optimistic concurrency;
+a 409 requires reopening the saved draft before another save. Drafts reopen as
+editable CSV, including aliases and N/P values. Empty tables get schedule headers
+with no initial players. Defaults reuse the earliest unfinished week selection,
+falling back to the latest available schedule. Explicit unavailable weeks return
+404 without substitution. The newest available season is the initial season.
+CSV requests are limited to 250 KB in the browser and 500 KB at the API envelope.
+
+Submission confirms intent, validates using Numbers importer rules plus duplicate
+IDs, malformed rows and finite/nonnegative tiebreakers, saves the draft, writes
+the validated CSV to the private importer path, then synchronously invokes
+`import_picks`. Only an actual processor success is shown as successful. Drafts
+are retained on failure. Submitted-object metadata records `pending`/`complete`;
+a different CSV cannot replace an unresolved input. Retrying the same CSV runs
+the existing idempotent importer and repairs partial week/season publication.
+Admin concurrency is one; stale drafts and conditional S3 writes prevent
+accidental overwrites. Do not run manual imports concurrently with portal edits.
+
+HTTP API integrations time out at 30 seconds while the admin Lambda may continue
+for up to 90 seconds (processor limit: 60). A gateway timeout is **not** proof of
+failure. Wait 90 seconds, reopen the preserved draft, then retry the same CSV.
+Transient 429s can occur while the single admin execution is occupied. If a
+pending input must be replaced, an operator must first verify the processor has
+finished, review its logs and published week/season JSON, and resolve the pending
+object explicitly; the portal deliberately cannot bypass that protection. Legacy
+inputs without status metadata also require operator review before replacement.
+
+Local checks cover mocked AWS authorization/storage/processor contracts and browser
+OAuth/API simulations. Real managed login, invitation delivery, JWT rejection,
+effective IAM, private-path denial, CloudFront `/admin/` routing and a real
+submission remain post-deployment checks. No AWS resources were changed locally.
+
+At a few commissioners and hundreds of monthly calls, expect incremental cost
+well below $1/month, depending on account allowances and logging. Cognito's direct
+sign-in allowance is currently 10,000 MAUs/account or organization; HTTP API
+requests are approximately $1/million at the first tier, plus Lambda duration,
+S3 requests/storage, CloudFront function invocations and logs. This is an estimate,
+not a cap; see [Cognito pricing](https://aws.amazon.com/cognito/pricing/) and
+[HTTP API pricing](https://aws.amazon.com/api-gateway/pricing/).

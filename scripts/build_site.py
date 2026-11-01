@@ -38,6 +38,8 @@ def build_site(source_root: Path, output_dir: Path) -> None:
         output_dir / "assets",
         ignore=shutil.ignore_patterns("documents", ".DS_Store"),
     )
+    if (site_root / "admin").exists():
+        shutil.copytree(site_root / "admin", output_dir / "admin")
     data_root = source_root / "data"
     for path in data_root.rglob("*.json"):
         relative = path.relative_to(data_root)

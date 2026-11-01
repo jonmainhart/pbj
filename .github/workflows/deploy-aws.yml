@@ -29,19 +29,20 @@ jobs:
             --target build/aws/package \
             --no-compile --only-binary=:all:
           cp aws/lambda_function.py build/aws/package/
-          cp aws/{__init__,processing,storage}.py build/aws/package/aws/
+          cp aws/{__init__,processing,storage,admin,admin_csv}.py build/aws/package/aws/
           cp scripts/{__init__,aggregate_season,generate_manifest,import_picks,score_week,select_active_week,should_poll,update_games}.py build/aws/package/scripts/
           cd build/aws/package
           # Import from the staged artifact, outside the source tree.
           python - <<'PY'
           from pathlib import Path
           import boto3, botocore, lambda_function, pbj
-          from aws import processing, storage
+          from aws import processing, storage, admin, admin_csv
           from scripts import update_games
 
-          modules = (lambda_function, processing, storage, pbj, update_games)
+          modules = (lambda_function, processing, storage, admin, admin_csv, pbj, update_games)
           assert all(Path(module.__file__).is_relative_to(Path.cwd()) for module in modules)
           assert lambda_function.lambda_handler({}, None)["status"] == "ok"
+          assert admin.lambda_handler({}, None)["statusCode"] == 403
           PY
           zip -qr ../deployment.zip . -x '*/__pycache__/*' '*.pyc'
       - name: Configure AWS credentials
@@ -63,6 +64,20 @@ jobs:
           expected=$(openssl dgst -sha256 -binary build/aws/deployment.zip | openssl base64 -A)
           actual=$(aws lambda get-function --function-name "$FUNCTION_NAME" --query 'Configuration.CodeSha256' --output text)
           test "$actual" = "$expected"
+      - name: Deploy admin API code
+        run: |
+          aws lambda wait function-updated-v2 --function-name pbj-admin
+          aws lambda update-function-code --function-name pbj-admin --zip-file fileb://build/aws/deployment.zip --query '{LastUpdateStatus:LastUpdateStatus}'
+          aws lambda wait function-updated-v2 --function-name pbj-admin
+          expected=$(openssl dgst -sha256 -binary build/aws/deployment.zip | openssl base64 -A)
+          actual=$(aws lambda get-function --function-name pbj-admin --query 'Configuration.CodeSha256' --output text)
+          test "$actual" = "$expected"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Compile portal CSS
+        run: npm ci && npm run build:admin
       - name: Build and deploy static preview
         run: |
           python -m pip install '.[aws,docs]'

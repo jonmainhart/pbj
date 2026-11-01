@@ -55,6 +55,10 @@ resource "aws_cloudfront_distribution" "preview" {
     cached_methods         = ["GET", "HEAD"]
     cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
     compress               = true
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.admin.arn
+    }
   }
   ordered_cache_behavior {
     path_pattern               = "/data/*"

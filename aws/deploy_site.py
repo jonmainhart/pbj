@@ -11,6 +11,7 @@ from scripts.build_site import PUBLIC_FILES
 BUCKET = "pbj-preview-jm26"
 STATIC_FILES = {
     "index.html",
+    "admin/index.html",
     "manifest.webmanifest",
     *PUBLIC_FILES,
     "assets/announcement-top.txt",
@@ -29,6 +30,8 @@ def upload_site(client: UploadClient, artifact: Path) -> None:
     """Select static files from build/site; never sync or delete operational objects."""
     for path in sorted(artifact.rglob("*")):
         relative = path.relative_to(artifact)
+        if relative.as_posix() == "assets/admin-config.json":
+            continue  # Terraform owns the public authentication configuration.
         if not path.is_file() or path.is_symlink():
             continue
         if relative.as_posix() not in STATIC_FILES and not (

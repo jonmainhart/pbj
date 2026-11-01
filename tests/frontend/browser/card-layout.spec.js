@@ -147,6 +147,7 @@ for (const width of [800, 1280]) {
         await page.setViewportSize({ width, height: 900 });
         await loadCards(page);
         await page.getByRole("button", { name: "🏆 Season" }).click();
+        await expect(page.locator("#season-list .season-card")).toHaveCount(3);
         const first = page.locator(".season-card").first();
         const [record] = await boxes(first.locator(".season-record"));
         const [winPercent] = await boxes(first.locator(".season-accuracy"));

@@ -13,6 +13,7 @@ def test_upload_only_public_static_files(tmp_path):
     artifact = tmp_path / "site"
     build_site(ROOT, artifact)
     (artifact / "private.csv").write_text("private")
+    (artifact / "assets/admin-config.json").write_text("{}")
     (artifact / "BALLDONTLIE.key").write_text("secret")
     calls = []
 
@@ -32,7 +33,8 @@ def test_upload_only_public_static_files(tmp_path):
         "LEGAL.md",
     } <= keys
     assert not any(key.startswith("data/") or key.endswith(".csv") for key in keys)
-    assert not {"CNAME", "BALLDONTLIE.key", "private.csv"} & keys
+    assert not {"CNAME", "BALLDONTLIE.key", "private.csv", "assets/admin-config.json"} & keys
+    assert "admin/index.html" in keys
     assert all(bucket == "pbj-preview-jm26" for bucket, _, _ in calls)
     assert all(args["CacheControl"] == "no-cache" for _, _, args in calls)
     assert (artifact / "CNAME").exists()
