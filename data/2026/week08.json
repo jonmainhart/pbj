@@ -34,7 +34,7 @@
       },
       "status": "live",
       "away_score": 10,
-      "home_score": 29
+      "home_score": 36
     },
     {
       "id": "1392325",
@@ -68,7 +68,7 @@
       },
       "status": "live",
       "away_score": 24,
-      "home_score": 27
+      "home_score": 30
     },
     {
       "id": "1392327",
@@ -168,9 +168,9 @@
         "abbreviation": "LAR",
         "name": "Los Angeles Rams"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392333",
