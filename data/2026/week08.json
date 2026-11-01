@@ -84,7 +84,7 @@
         "name": "Detroit Lions"
       },
       "status": "live",
-      "away_score": 7,
+      "away_score": 15,
       "home_score": 12
     },
     {
@@ -102,7 +102,7 @@
       },
       "status": "live",
       "away_score": 35,
-      "home_score": 30
+      "home_score": 33
     },
     {
       "id": "1392329",
