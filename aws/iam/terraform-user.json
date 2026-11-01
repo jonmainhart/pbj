@@ -203,6 +203,7 @@
         "cognito-idp:TagResource", "cognito-idp:UntagResource",
         "cognito-idp:CreateUserPoolClient",
         "cognito-idp:DescribeUserPoolClient",
+        "cognito-idp:ListUserPoolClients",
         "cognito-idp:UpdateUserPoolClient",
         "cognito-idp:CreateResourceServer",
         "cognito-idp:DescribeResourceServer",
