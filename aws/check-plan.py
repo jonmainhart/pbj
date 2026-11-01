@@ -4,6 +4,13 @@ import json
 import sys
 
 ALLOWED = {
+    "aws_s3_bucket.preview",
+    "aws_s3_bucket_public_access_block.preview",
+    "aws_cloudfront_origin_access_control.preview",
+    "aws_cloudfront_response_headers_policy.data",
+    "aws_cloudfront_distribution.preview",
+    "aws_s3_bucket_policy.preview",
+    "aws_s3_bucket_policy.preview_data",
     "aws_iam_role.scheduler",
     "aws_iam_role_policy.scheduler",
     "aws_scheduler_schedule.create_week",

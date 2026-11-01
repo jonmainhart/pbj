@@ -20,7 +20,7 @@ jobs:
     needs: quality
     runs-on: ubuntu-latest
     environment: pbj-aws-infra
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:

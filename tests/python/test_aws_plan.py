@@ -25,6 +25,24 @@ GUARD = Path(__file__).resolve().parents[2] / "aws" / "check-plan.py"
         ("aws_lambda_function.processor", ["delete"], False),
         ("aws_lambda_function.processor", ["delete", "create"], False),
         ("aws_lambda_function.processor", ["create", "delete"], False),
+        *[
+            (address, actions, accepted)
+            for address in (
+                "aws_s3_bucket.preview",
+                "aws_s3_bucket_public_access_block.preview",
+                "aws_cloudfront_origin_access_control.preview",
+                "aws_cloudfront_response_headers_policy.data",
+                "aws_cloudfront_distribution.preview",
+                "aws_s3_bucket_policy.preview",
+                "aws_s3_bucket_policy.preview_data",
+            )
+            for actions, accepted in (
+                (["create"], True),
+                (["update"], True),
+                (["delete"], False),
+                (["delete", "create"], False),
+            )
+        ],
         ("aws_s3_object.picks", ["create"], False),
         ("aws_iam_role.power_user", ["update"], False),
         ("aws_iam_role_policy.processor", ["delete"], False),

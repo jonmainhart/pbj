@@ -8,7 +8,7 @@ const cases = [
     { name: "season", load: () => fetchSeason(2026), path: "./data/2026/season.json",
         options: { cache: "no-store" }, error: "Season standings are not available yet." },
     { name: "manifest", load: fetchAvailableWeeks, path: "./data/available-weeks.json",
-        options: undefined, error: "Available weeks could not be loaded." },
+        options: { cache: "no-store" }, error: "Available weeks could not be loaded." },
 ];
 
 for (const entry of cases) {

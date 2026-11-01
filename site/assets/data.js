@@ -31,7 +31,7 @@ export async function fetchSeason(season) {
 }
 
 export async function fetchAvailableWeeks() {
-    const response = await fetch("./data/available-weeks.json");
+    const response = await fetch("./data/available-weeks.json", { cache: "no-store" });
 
     if (!response.ok) {
         throw new Error("Available weeks could not be loaded.");

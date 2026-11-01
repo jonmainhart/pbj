@@ -9,6 +9,13 @@
         "lambda:GetFunctionConfiguration"
       ],
       "Resource": "arn:aws:lambda:us-east-2:ACCOUNT_ID:function:pbj-processor"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::pbj-preview-jm26/*"
     }
   ]
 }
