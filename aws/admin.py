@@ -13,7 +13,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from aws import storage
-from aws.admin_csv import inspect_csv
+from aws.admin_csv import inspect_csv, published_csv
 from pbj.active_week import select_active_week
 from pbj.week_data import load_games
 
@@ -128,11 +128,16 @@ def dispatch(event: dict[str, Any]) -> dict[str, Any]:
     key = f"incoming/{season}/drafts/week{week:02d}.csv"
     if method == "GET" and action is None:
         draft = read_private_csv(s3, config, key)
+        text = (
+            draft.content.decode("utf-8-sig")
+            if draft is not None
+            else published_csv(json.loads(schedule.content).get("players", []), games)
+        )
         return response(
             200,
             {
-                **inspect_csv(draft.content.decode("utf-8-sig") if draft else "", games),
-                "etag": draft.etag if draft else None,
+                **inspect_csv(text, games),
+                "etag": draft.etag if draft is not None else None,
                 "games": [
                     dict(id=g.id, away=g.away.abbreviation, home=g.home.abbreviation) for g in games
                 ],

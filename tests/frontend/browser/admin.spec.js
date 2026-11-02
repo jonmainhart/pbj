@@ -611,3 +611,31 @@ test('matching content does not erase unresolved older recovery provenance', asy
     await expect(page.locator('#save')).toBeEnabled();
     expect(await page.evaluate(() => JSON.parse(Object.entries(localStorage).find(([key]) => key.startsWith('pbj.draft.') && !key.endsWith('.selection'))[1]).etag)).toBe('old');
 });
+
+test('published picks open clean, autosave only after editing, and retain device recovery', async ({page}) => {
+    await page.clock.install();
+    const writes = [];
+    page.on('request', request => {
+        if (request.url().endsWith('/draft')) writes.push(request.postDataJSON());
+    });
+    await authenticated(page, {rows:[['Alice','SEA','42.5'],['Bob','N/P','0']]});
+    await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Alice');
+    await expect(page.getByLabel('Player 1 TIEBREAKER',{exact:true})).toHaveValue('42.5');
+    await expect(page.locator('#picks tbody tr')).toHaveCount(3);
+    await expect(page.locator('#save')).toBeDisabled();
+    await page.clock.runFor(6000);
+    expect(writes).toEqual([]);
+    await page.locator('[data-row="0"][data-column="1"]').fill('NE');
+    await expect(page.locator('#save')).toBeEnabled();
+    await page.clock.runFor(3100);
+    await expect(page.locator('#save')).toBeDisabled();
+    expect(writes).toHaveLength(1);
+    expect(writes[0].etag).toBeNull();
+    expect(writes[0].csv).toContain('"Alice","NE","42.5"');
+    await page.getByLabel('Player 1 TIEBREAKER',{exact:true}).fill('50');
+    await authenticated(page, {rows:[['Alice','SEA','42.5'],['Bob','N/P','0']]});
+    await expect(page.locator('#recovery')).toBeVisible();
+    await expect(page.getByLabel('Player 1 TIEBREAKER',{exact:true})).toHaveValue('42.5');
+    await page.locator('#restore-device').click();
+    await expect(page.getByLabel('Player 1 TIEBREAKER',{exact:true})).toHaveValue('50');
+});

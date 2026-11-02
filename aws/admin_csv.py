@@ -9,6 +9,51 @@ from pbj.domain.game import Game
 from pbj.importers import numbers
 
 
+def published_csv(players: Any, games: list[Game]) -> str:
+    """Reconstruct published picks without dropping unrepresentable player data."""
+    if not isinstance(players, list):
+        raise ValueError("Published players must be a list")
+    if not players:
+        return ""
+    game_ids = {g.id for g in games}
+    if len(game_ids) != len(games):
+        raise ValueError("Published schedule contains duplicate game IDs")
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        ["NAME", *[f"{g.away.abbreviation} {g.home.abbreviation}" for g in games], "TIEBREAKER"]
+    )
+    for index, player in enumerate(players, start=1):
+        message = f"Published player {index}"
+        if not isinstance(player, dict):
+            raise ValueError(f"{message} must be an object")
+        name, picks, tiebreaker = (player.get(k) for k in ("name", "picks", "tiebreaker"))
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"{message} requires a displayed name")
+        if not isinstance(picks, dict) or picks.keys() - game_ids:
+            raise ValueError(f"{message} picks must reference only scheduled game IDs")
+        for game in games:
+            if game.id in picks and picks[game.id] not in (
+                game.away.abbreviation,
+                game.home.abbreviation,
+            ):
+                raise ValueError(f"{message} has an invalid pick for game {game.id}")
+        if (
+            isinstance(tiebreaker, bool)
+            or not isinstance(tiebreaker, (int, float))
+            or not math.isfinite(tiebreaker)
+            or tiebreaker < 0
+        ):
+            raise ValueError(f"{message} requires a finite nonnegative numeric tiebreaker")
+        writer.writerow([name, *[picks.get(g.id, numbers.NON_PICK) for g in games], tiebreaker])
+    text = output.getvalue()
+    result = inspect_csv(text, games)
+    errors = [i["message"] for i in result["issues"] if i["severity"] == "error"]
+    if errors:
+        raise ValueError(f"Published picks cannot be reconstructed: {'; '.join(errors)}")
+    return text
+
+
 def inspect_csv(text: str, games: list[Game]) -> dict[str, Any]:
     """Preserve editable input and report all errors with zero-based cell coordinates."""
     expected = [

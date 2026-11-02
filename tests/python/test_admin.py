@@ -3,6 +3,7 @@
 import json
 from io import BytesIO, StringIO
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import boto3
@@ -231,7 +232,9 @@ def test_open_week_reads_s3_draft_and_distinguishes_errors(monkeypatch):
     real_read = storage.read
     client = setup_api(monkeypatch)
     monkeypatch.setattr(storage, "read", real_read)
-    schedule = Path("data/2026/week01.json").read_bytes()
+    raw = json.loads(Path("data/2026/week01.json").read_text())
+    raw["players"] = []
+    schedule = json.dumps(raw).encode()
     games = load_games(Path("data/2026/week01.json"))
     expected_headers = [
         "NAME",
@@ -339,3 +342,143 @@ def test_reversed_matchup_csv_preserves_game_association():
     assert import_players(StringIO(result["csv"]), games)[0].picks == {
         game.id: game.away.abbreviation
     }
+
+
+def published_week(monkeypatch, players=None, draft=None):
+    client = setup_api(monkeypatch)
+    raw = json.loads(Path("data/2026/week01.json").read_text())
+    games = load_games(Path("data/2026/week01.json"))
+    raw["players"] = (
+        players
+        if players is not None
+        else [
+            dict(
+                name='Zoë, "Coach"',
+                picks={g.id: g.home.abbreviation for g in reversed(games)},
+                tiebreaker=42.5,
+            ),
+            dict(name="Alice", picks={}, tiebreaker=0),
+        ]
+    )
+    monkeypatch.setattr(
+        storage,
+        "read",
+        lambda s, c, k, **kw: (
+            storage.Snapshot(json.dumps(raw).encode(), "published")
+            if k.endswith(".json")
+            else draft
+        ),
+    )
+    return client, raw, games
+
+
+def test_published_picks_round_trip_without_writes(monkeypatch):
+    client, raw, games = published_week(monkeypatch)
+    result = admin.lambda_handler(event(), None)
+    assert result["statusCode"] == 200
+    body = json.loads(result["body"])
+    assert body["etag"] is None
+    assert body["headers"] == inspect_csv("", games)["headers"]
+    assert [row[0] for row in body["rows"]] == [p["name"] for p in raw["players"]]
+    assert body["rows"][0][1:-1] == [g.home.abbreviation for g in games]
+    assert body["rows"][1][1:-1] == ["N/P"] * len(games)
+    assert not any(i["severity"] == "error" for i in body["issues"])
+    players = import_players(StringIO(body["csv"]), games)
+    assert [(p.name, p.picks, p.tiebreaker) for p in players] == [
+        (p["name"], p["picks"], p["tiebreaker"]) for p in raw["players"]
+    ]
+    client.put_object.assert_not_called()
+    saved = admin.lambda_handler(
+        event("/weeks/2026/1/draft", "PUT", csv=body["csv"], etag=body["etag"]), None
+    )
+    assert saved["statusCode"] == 200
+    assert client.put_object.call_args.kwargs["IfNoneMatch"] == "*"
+    assert "IfMatch" not in client.put_object.call_args.kwargs
+    client.put_object.side_effect = ClientError(
+        {"Error": {"Code": "PreconditionFailed"}}, "PutObject"
+    )
+    assert (
+        admin.lambda_handler(event("/weeks/2026/1/draft", "PUT", csv=body["csv"], etag=None), None)[
+            "statusCode"
+        ]
+        == 409
+    )
+
+
+def test_existing_drafts_override_published_players_even_empty_or_invalid(monkeypatch):
+    for text in ("", "NAME,NE SEA,TIEBREAKER\nPartial,\n", valid_csv()):
+        client, _, games = published_week(
+            monkeypatch, draft=storage.Snapshot(text.encode(), "draft")
+        )
+        body = json.loads(admin.lambda_handler(event(), None)["body"])
+        assert body["etag"] == "draft"
+        assert {k: body[k] for k in ("headers", "rows", "csv", "issues")} == inspect_csv(
+            text, games
+        )
+        client.put_object.assert_not_called()
+
+
+def test_no_published_players_stays_blank(monkeypatch):
+    client, _, games = published_week(monkeypatch, players=[])
+    body = json.loads(admin.lambda_handler(event(), None)["body"])
+    assert body["rows"] == []
+    assert body["headers"] == inspect_csv("", games)["headers"]
+    assert body["etag"] is None
+    client.put_object.assert_not_called()
+
+
+def test_malformed_published_players_return_useful_error(monkeypatch):
+    game_id = load_games(Path("data/2026/week01.json"))[0].id
+    cases: list[Any] = [
+        None,
+        {},
+        [None],
+        [dict(name="Alice", picks={game_id: None}, tiebreaker=3)],
+        [dict(name="Alice", picks={}, tiebreaker=3)] * 2,
+        [dict(name="Alice", picks={}, tiebreaker=3), None],
+        [dict(name="", picks={}, tiebreaker=3)],
+        [dict(name="Alice", picks=[], tiebreaker=3)],
+        [dict(name="Alice", picks={"unknown": "SEA"}, tiebreaker=3)],
+        [dict(name="Alice", picks={}, tiebreaker=None)],
+        [dict(name="Alice", picks={}, tiebreaker=True)],
+        [dict(name="Alice", picks={}, tiebreaker=float("inf"))],
+    ]
+    for players in cases:
+        client, raw, _ = published_week(monkeypatch)
+        raw["players"] = players
+        monkeypatch.setattr(
+            storage,
+            "read",
+            lambda s, c, k, raw=raw, **kw: (
+                storage.Snapshot(json.dumps(raw).encode(), "published")
+                if k.endswith(".json")
+                else None
+            ),
+        )
+        result = admin.lambda_handler(event(), None)
+        assert result["statusCode"] == 400
+        assert "published" in json.loads(result["body"])["message"].lower()
+        client.put_object.assert_not_called()
+
+
+def test_existing_fixture_players_follow_reordered_schedule(monkeypatch):
+    client = setup_api(monkeypatch)
+    raw = json.loads(Path("data/2026/week01.json").read_text())
+    raw["games"].reverse()
+    monkeypatch.setattr(
+        storage,
+        "read",
+        lambda s, c, k, **kw: (
+            storage.Snapshot(json.dumps(raw).encode(), "published") if k.endswith(".json") else None
+        ),
+    )
+    result = admin.lambda_handler(event(), None)
+    assert result["statusCode"] == 200
+    body = json.loads(result["body"])
+    games = list(reversed(load_games(Path("data/2026/week01.json"))))
+    assert body["headers"] == inspect_csv("", games)["headers"]
+    players = import_players(StringIO(body["csv"]), games)
+    assert [(p.name, p.picks, p.tiebreaker) for p in players] == [
+        (p["name"], p["picks"], p["tiebreaker"]) for p in raw["players"]
+    ]
+    client.put_object.assert_not_called()
