@@ -1,20 +1,126 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#526f69"><meta name="description" content="Prepare, validate and submit PBJ weekly picks."><link rel="icon" type="image/png" href="/assets/img/favicon.png"><link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png"><title>PBJ · Commissioner</title><link rel="stylesheet" href="/assets/admin.css"></head>
-<body class="bg-pbj-background text-pbj-ink min-h-screen"><main class="max-w-7xl mx-auto p-4 md:p-8 min-w-0">
-<header class="flex flex-wrap justify-between items-center gap-4 mb-6 rounded-2xl bg-pbj-surface p-5 shadow-sm"><div class="flex items-center gap-4 min-w-0"><a href="/" aria-label="PBJ dashboard" class="shrink-0"><img src="/assets/img/logo-transparent-full.png" alt="PBJ" class="w-16 h-16 object-contain"></a><div><h1 class="text-3xl font-bold">Commissioner portal</h1><p class="text-pbj-muted">Prepare weekly picks · Save privately · Submit when ready</p></div></div><button id="login">Sign in</button><button id="logout" class="text-link" hidden>Sign out</button></header>
-<p id="status" class="text-sm break-words" role="status" aria-live="polite">Sign in with your commissioner account to begin.</p>
-<p id="recovery-status" role="status" class="text-pbj-warning text-sm"></p>
-<section id="editor" hidden class="space-y-5 mt-6 min-w-0">
-<div class="flex flex-wrap gap-4 items-end bg-pbj-surface rounded-2xl p-4 shadow-sm"><label>Season<select id="season"></select></label><label>Week<select id="week"></select></label><button id="empty">Start empty table</button><button id="headers" hidden>Repair schedule headers</button><button id="reopen">Reopen saved draft</button></div>
-<section id="recovery" hidden class="bg-pbj-surface rounded-xl p-4 border border-pbj-border" aria-label="Device recovery">
-<p id="recovery-message"></p><div class="flex flex-wrap gap-3 mt-3"><button id="restore-device">Restore device copy</button><button id="discard-device">Discard device copy</button></div>
-</section>
-<div id="drop" class="border-2 border-dashed border-pbj-border rounded-xl p-6"><label>Drop a CSV here or choose a file <input id="file" type="file" accept=".csv,text/csv" class="block mt-3"></label><p class="text-pbj-muted mt-2">Headers come from the selected schedule. Use N/P to record no pick.</p></div>
-<section id="header-choice" hidden aria-label="CSV first row">
-<p>No NAME header was found. Does the first row contain headers or player data? All uploaded rows are preserved until you choose.</p>
-<div class="flex flex-wrap gap-3"><button id="first-headers">First row contains headers</button><button id="first-players">First row contains player data</button></div>
-</section>
-<div class="flex flex-wrap gap-3"><button id="validate">Validate</button><button id="save" disabled>Save Draft</button><button id="submit" class="bg-pbj-accent text-pbj-ink">Submit Picks</button><span id="dirty" role="status"></span></div>
-<div id="issues" role="region" aria-label="Validation results"></div>
-<div class="overflow-auto max-h-[65vh] max-w-full bg-pbj-surface shadow-sm rounded-xl border border-pbj-border"><table id="picks" class="text-sm w-full"><caption class="text-left p-3">Weekly picks — enter a player in the empty row. Select a header to correct it.</caption><thead></thead><tbody></tbody></table></div>
-</section><p class="text-sm text-pbj-muted mt-6">Unsaved picks are kept on this device for recovery after sign-in. Browser storage is not encrypted; anyone with access to this browser profile may be able to read it.</p></main><script type="module" src="/assets/admin.js"></script></body></html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#526f69" />
+    <meta
+      name="description"
+      content="Prepare, validate and submit PBJ weekly picks."
+    />
+    <link rel="icon" type="image/png" href="/assets/img/favicon.png" />
+    <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png" />
+    <title>PBJ · Commissioner</title>
+    <link rel="stylesheet" href="/assets/admin.css" />
+  </head>
+  <body class="bg-pbj-background text-pbj-ink min-h-screen">
+    <main class="max-w-7xl mx-auto p-4 md:p-8 min-w-0">
+      <header
+        class="flex flex-wrap justify-between items-center gap-4 mb-6 rounded-2xl bg-pbj-surface p-5 shadow-sm"
+      >
+        <div class="flex items-center gap-4 min-w-0">
+          <a href="/" aria-label="PBJ dashboard" class="shrink-0"
+            ><img
+              src="/assets/img/logo-transparent-full.png"
+              alt="PBJ"
+              class="w-16 h-16 object-contain"
+          /></a>
+          <div>
+            <h1 class="text-3xl font-bold">Commissioner portal</h1>
+            <p class="text-pbj-muted">
+              Prepare weekly picks · Submit when ready
+            </p>
+          </div>
+        </div>
+        <button id="login">Sign in</button
+        ><button id="logout" class="text-link" hidden>Sign out</button>
+      </header>
+      <p
+        id="status"
+        class="text-sm break-words"
+        role="status"
+        aria-live="polite"
+      >
+        Sign in with your commissioner account to begin.
+      </p>
+      <p
+        id="recovery-status"
+        role="status"
+        class="text-pbj-warning text-sm"
+      ></p>
+      <section id="editor" hidden class="space-y-5 mt-6 min-w-0">
+        <div
+          class="flex flex-wrap gap-4 items-end bg-pbj-surface rounded-2xl p-4 shadow-sm"
+        >
+          <label>Season<select id="season"></select></label
+          ><label>Week<select id="week"></select></label
+          ><button id="empty">Start empty table</button
+          ><button id="headers" hidden>Repair schedule headers</button
+          ><button id="reopen">Reopen saved draft</button>
+        </div>
+        <section
+          id="recovery"
+          hidden
+          class="bg-pbj-surface rounded-xl p-4 border border-pbj-border"
+          aria-label="Device recovery"
+        >
+          <p id="recovery-message"></p>
+          <div class="flex flex-wrap gap-3 mt-3">
+            <button id="restore-device">Restore device copy</button
+            ><button id="discard-device">Discard device copy</button>
+          </div>
+        </section>
+        <div
+          id="drop"
+          class="border-2 border-dashed border-pbj-border rounded-xl p-6"
+        >
+          <label
+            >Drop a CSV here or choose a file
+            <input
+              id="file"
+              type="file"
+              accept=".csv,text/csv"
+              class="block mt-3"
+          /></label>
+          <p class="text-pbj-muted mt-2">
+            Headers come from the selected schedule. Use N/P to record no pick.
+          </p>
+        </div>
+        <section id="header-choice" hidden aria-label="CSV first row">
+          <p>
+            No NAME header was found. Does the first row contain headers or
+            player data? All uploaded rows are preserved until you choose.
+          </p>
+          <div class="flex flex-wrap gap-3">
+            <button id="first-headers">First row contains headers</button
+            ><button id="first-players">First row contains player data</button>
+          </div>
+        </section>
+        <div class="flex flex-wrap gap-3">
+          <button id="validate">Validate</button
+          ><button id="save" disabled>Save Draft</button
+          ><button id="submit" class="bg-pbj-accent text-pbj-ink">
+            Submit Picks</button
+          ><span id="dirty" role="status"></span>
+        </div>
+        <div id="issues" role="region" aria-label="Validation results"></div>
+        <div
+          class="overflow-auto max-h-[65vh] max-w-full bg-pbj-surface shadow-sm rounded-xl border border-pbj-border"
+        >
+          <table id="picks" class="text-sm w-full">
+            <caption class="text-left p-3">
+              Weekly picks — enter a player in the empty row. Select a header to
+              correct it.
+            </caption>
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+      <p class="text-sm text-pbj-muted mt-6">
+        Unsaved picks are kept on this device for recovery after sign-in.
+      </p>
+    </main>
+    <script type="module" src="/assets/admin.js"></script>
+  </body>
+</html>
