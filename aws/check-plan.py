@@ -76,8 +76,25 @@ for change in plan.get("resource_changes", []):
         and isinstance(unknown, dict)
         and all(unknown.get(field, False) is False for field in ("bucket", "key"))
     )
+    reset_default_branding = (
+        change["address"] == "aws_cognito_managed_login_branding.admin"
+        and change["mode"] == "managed"
+        and actions == ["delete", "create"]
+        and change.get("action_reason") == "replace_because_cannot_update"
+        and isinstance(details.get("before"), dict)
+        and isinstance(details.get("after"), dict)
+        and details["before"].get("use_cognito_provided_values") is False
+        and details["after"].get("use_cognito_provided_values") is True
+        and all(
+            isinstance(details["before"].get(field), str)
+            and details["before"][field] == details["after"].get(field)
+            for field in ("user_pool_id", "client_id")
+        )
+    )
     if change["address"] not in ALLOWED or (
-        actions not in (["no-op"], ["create"], ["update"]) and not tainted_admin_config
+        actions not in (["no-op"], ["create"], ["update"])
+        and not tainted_admin_config
+        and not reset_default_branding
     ):
         sys.exit(f"Rejected {change['address']}: {actions}")
 print(
