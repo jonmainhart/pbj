@@ -308,3 +308,34 @@ def test_private_listing_permission_is_limited_to_csv_key_patterns():
         'Resource = ["arn:aws:s3:::${local.data_bucket}/incoming/????/drafts/week??.csv", '
         '"arn:aws:s3:::${local.data_bucket}/incoming/????/week??.csv"]' in config
     )
+
+
+def test_verified_identity_and_schedule_orientation_are_exposed(monkeypatch):
+    setup_api(monkeypatch)
+    monkeypatch.setattr(storage, "list_keys", lambda *a: ["data/2026/week01.json"])
+    catalog = json.loads(admin.lambda_handler(event("/schedules"), None)["body"])
+    assert catalog["user_id"] == "commissioner"
+    body = json.loads(admin.lambda_handler(event(), None)["body"])
+    games = load_games(Path("data/2026/week01.json"))
+    assert body["games"] == [
+        dict(id=g.id, away=g.away.abbreviation, home=g.home.abbreviation) for g in games
+    ]
+    request = event("/schedules")
+    del request["requestContext"]["authorizer"]["jwt"]["claims"]["sub"]
+    rejected = admin.lambda_handler(request, None)
+    assert rejected["statusCode"] == 403
+    assert "user_id" not in json.loads(rejected["body"])
+
+
+def test_reversed_matchup_csv_preserves_game_association():
+    games = load_games(Path("data/2026/week01.json"))[:1]
+    game = games[0]
+    text = (
+        f"NAME,{game.home.abbreviation} {game.away.abbreviation},TIEBREAKER\n"
+        f"Alice,{game.away.abbreviation},30\n"
+    )
+    result = inspect_csv(text, games)
+    assert result["issues"] == []
+    assert import_players(StringIO(result["csv"]), games)[0].picks == {
+        game.id: game.away.abbreviation
+    }

@@ -49,3 +49,19 @@ export function restoreHeaders(table, headers) {
     return {headers, rows: table.rows.map(row => targets.map(target => row[columns.indexOf(target)] ?? ''))};
 }
 export function canSwitch(dirty, confirm) { return !dirty || confirm('Discard unsaved edits?'); }
+
+
+const normalizedHeader = value => value.trim().toUpperCase().split(/\s+/).map(v => ({JAC:'JAX', WAS:'WSH'}[v] || v)).sort().join(' ');
+export function matchupFor(header, headers, games) {
+    const key = normalizedHeader(header);
+    const matches = games.filter(game => normalizedHeader(`${game.away} ${game.home}`) === key);
+    if (matches.length !== 1 || headers.filter(value => normalizedHeader(value) === key).length !== 1) return null;
+    return matches[0];
+}
+/** Reversed order and aliases are accepted representations, not repair problems. */
+export function needsHeaderRepair(table, expected) {
+    if (table.needsHeaderChoice || !expected.length) return false;
+    const actual = table.headers.map(normalizedHeader), target = expected.map(normalizedHeader);
+    return table.headers[0]?.trim() !== 'NAME' || !table.headers.some(header => header.trim() === 'TIEBREAKER') ||
+        actual.length !== target.length || target.some(key => actual.filter(value => value === key).length !== 1);
+}

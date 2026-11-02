@@ -450,3 +450,58 @@ are changed by this work. `GITHUB_TOKEN` bot commits do not trigger push workflo
 other data-only pushes receive lightweight JSON validation. Existing production
 workflows and Pages publication remain independent and unchanged; quality is not
 a deployment dependency. Routine score updates do not invoke full QA.
+
+## Commissioner session continuity and draft recovery
+
+The portal keeps access and refresh tokens in memory. The original OAuth code
+exchange still uses S256 PKCE and state verification. Before a request near access
+expiry, it renews through Cognito's `/oauth2/token` refresh-token grant, sharing one
+renewal across concurrent callers. A 401 rejection can renew and replay once;
+network failures and server errors never replay a submission. Reloading requires
+sign-in again. The existing public client and refresh validity need no Terraform
+changes. See [Cognito token endpoint](https://docs.aws.amazon.com/cognito/latest/developerguide/token-endpoint.html).
+
+The existing `/schedules` response now includes `user_id` from API Gateway's
+verified Cognito claims. The existing open-week response includes minimal `games`
+metadata (`id`, `away`, `home`) derived from the schedule's game objects. These
+additive fields establish recovery ownership and matchup presentation without
+changing published weekly JSON or the Numbers importer. Reversed headers and
+aliases remain accepted; the display always uses schedule away/home orientation.
+Invalid or duplicate headers remain explicitly editable. Structural row-width
+errors use the existing row controls, rather than a schedule repair shortcut.
+
+Edits are copied synchronously to localStorage and saved to the private shared
+S3 draft after three seconds of inactivity. Draft writes are serialized and
+conditional on the last confirmed ETag. Edits made during a write remain dirty
+and get their own subsequent save. Failures keep the device copy; a 409 blocks
+further writes until the server draft is reopened and reviewed. Reconnection
+retries a conditional draft save, never submission or publication. Unresolved
+CSV first-row interpretation is retained locally until the user chooses it.
+
+Recovery records contain table contents and the base ETag, scoped to the API,
+app client, verified Cognito subject, season and week. No OAuth tokens or
+credentials are stored with them. A selection pointer remembers which week to
+open after authentication. Recovery is never read into the editor before the
+API verifies the account. It is offered explicitly alongside the server draft;
+a different base ETag warns that a newer shared draft exists. Restoring a device
+copy pauses autosave and requires a reviewed, confirmed Save Draft before any
+server replacement. Discard device copy deliberately removes that record.
+Confirmed saves remove redundant copies. Sign-out clears in-memory credentials
+and uses normal Cognito logout; unsaved recovery stays scoped to the same account.
+
+Local browser storage is **not encrypted** and does not isolate data from someone
+with access to the same browser profile or from script running on this origin.
+Use a trusted browser profile. Browser storage may be disabled, full, or cleared;
+the portal warns when recovery is unavailable, and private server saves remain
+the durable shared record. Multiple tabs still use S3 ETags; conflicts are never
+merged automatically. A recovery copy for the same account/week on one device
+uses one storage key, so a second tab can replace that device copy while both
+open editors retain their own in-memory contents. Use separate weeks or browser
+profiles when keeping independent unsaved versions.
+
+Deploy the updated admin Lambda before the updated static portal, through the
+existing deployment workflow. No new endpoint, service, IAM permission, or
+Terraform change is required. The static build copies PBJ artwork to
+`build/site/assets/img/`, and the existing preview uploader includes PNG assets.
+Tests verify the intended logo's bytes in the artifact, its inclusion in upload
+selection, and its actual browser decoding. No live upload is needed to test it.

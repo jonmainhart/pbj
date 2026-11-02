@@ -15,14 +15,25 @@
 @source "./admin.js";
 @layer base {
  button { @apply rounded-lg bg-pbj-surface border border-pbj-border px-4 py-2 cursor-pointer; }
- button:disabled { @apply opacity-50 cursor-wait; }
+ button:disabled { @apply opacity-50 cursor-not-allowed; }
  button:focus-visible, input:focus-visible, select:focus-visible { @apply outline-2 outline-pbj-accent; }
  select { @apply block rounded bg-pbj-surface border border-pbj-border p-2 mt-1; }
  th, td { @apply p-1 border border-pbj-border; }
  th { @apply bg-pbj-surface sticky top-0; }
- td input, th input { @apply w-28 bg-transparent p-2 rounded; }
+ td input, th input { @apply w-20 bg-transparent p-2 rounded; }
  td:first-child input { @apply w-40; }
  input[aria-invalid="true"] { @apply bg-pbj-error outline-2 outline-pbj-danger; }
  input[data-warning="true"] { @apply bg-pbj-accent; }
  [hidden] { display: none !important; }
+}
+
+@layer components {
+ .text-link { @apply border-0 bg-transparent underline text-pbj-muted px-2 min-h-11; }
+ .header-cell { @apply align-middle; }
+ .header-editor { @apply relative min-h-12; }
+ .header-cell input { @apply absolute inset-0 w-full h-full opacity-0 bg-pbj-surface; }
+ .header-cell input:focus { @apply opacity-100; }
+ #save { @apply bg-pbj-header text-pbj-surface border-pbj-header; }
+ button:hover:not(:disabled) { @apply brightness-95; }
+ #file { @apply max-w-full; }
 }

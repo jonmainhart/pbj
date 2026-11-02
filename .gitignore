@@ -94,7 +94,6 @@ yarn-error.log*
 *.numbers
 data/raw
 site/assets/img/logo-full.png
-site/assets/img/logo-transparent-full.png
 
 # Terraform local artifacts (commit .terraform.lock.hcl)
 **/.terraform/

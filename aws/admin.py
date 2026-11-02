@@ -104,7 +104,12 @@ def dispatch(event: dict[str, Any]) -> dict[str, Any]:
         week = select_active_week(weeks[season]) or max(weeks[season])
         return response(
             200,
-            dict(seasons={str(s): sorted(w) for s, w in weeks.items()}, season=season, week=week),
+            dict(
+                seasons={str(s): sorted(w) for s, w in weeks.items()},
+                season=season,
+                week=week,
+                user_id=event["requestContext"]["authorizer"]["jwt"]["claims"]["sub"],
+            ),
         )
     match = re.fullmatch(r"/weeks/(\d{4})/(0?[1-9]|1[0-8])(?:/(validate|draft|submit))?", path)
     if not match:
@@ -128,6 +133,9 @@ def dispatch(event: dict[str, Any]) -> dict[str, Any]:
             {
                 **inspect_csv(draft.content.decode("utf-8-sig") if draft else "", games),
                 "etag": draft.etag if draft else None,
+                "games": [
+                    dict(id=g.id, away=g.away.abbreviation, home=g.home.abbreviation) for g in games
+                ],
             },
         )
     body_text = event.get("body") or "{}"

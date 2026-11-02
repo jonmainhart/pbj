@@ -27,6 +27,7 @@ def test_upload_only_public_static_files(tmp_path):
         "index.html",
         "manifest.webmanifest",
         "assets/app.js",
+        "assets/img/logo-transparent-full.png",
         "assets/announcement-top.txt",
         "assets/announcement-bottom.txt",
         "assets/documents/rules.html",
@@ -37,6 +38,9 @@ def test_upload_only_public_static_files(tmp_path):
     assert "admin/index.html" in keys
     assert all(bucket == "pbj-preview-jm26" for bucket, _, _ in calls)
     assert all(args["CacheControl"] == "no-cache" for _, _, args in calls)
+    assert (artifact / "assets/img/logo-transparent-full.png").read_bytes() == (
+        ROOT / "site/assets/img/logo-transparent-full.png"
+    ).read_bytes()
     assert (artifact / "CNAME").exists()
     assert (artifact / "data/available-weeks.json").exists()
 
