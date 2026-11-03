@@ -153,7 +153,10 @@ resource "aws_scheduler_schedule" "create_week" {
   target {
     arn      = aws_lambda_function.processor.arn
     role_arn = aws_iam_role.scheduler.arn
-    input    = jsonencode({ action = "create_week", scheduled_time = "<aws.scheduler.scheduled-time>" })
+    # jsonencode escapes angle brackets, preventing Scheduler context substitution.
+    input = <<-JSON
+      {"action":"create_week","scheduled_time":"<aws.scheduler.scheduled-time>"}
+    JSON
     retry_policy {
       maximum_event_age_in_seconds = 300
       maximum_retry_attempts       = 2

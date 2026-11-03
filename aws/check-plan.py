@@ -65,6 +65,24 @@ for change in plan.get("resource_changes", []):
         continue
     actions = change["change"]["actions"]
     details = change["change"]
+    if change["address"] == "aws_scheduler_schedule.create_week":
+        targets = (details.get("after") or {}).get("target") or []
+        scheduler_input = targets[0].get("input") if len(targets) == 1 else None
+        # Inspect the raw Target.Input before JSON decoding can hide escaped brackets.
+        if (
+            not isinstance(scheduler_input, str)
+            or "<aws.scheduler.scheduled-time>" not in scheduler_input
+        ):
+            sys.exit("Rejected create_week Scheduler input: missing literal scheduled-time context")
+        try:
+            payload = json.loads(scheduler_input)
+        except ValueError:
+            sys.exit("Rejected create_week Scheduler input: invalid JSON")
+        if payload != {
+            "action": "create_week",
+            "scheduled_time": "<aws.scheduler.scheduled-time>",
+        }:
+            sys.exit("Rejected create_week Scheduler input: unexpected payload")
     unknown = details.get("after_unknown")
     tainted_admin_config = (
         change["address"] == "aws_s3_object.admin_config"

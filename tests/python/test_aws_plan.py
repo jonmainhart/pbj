@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 GUARD = Path(__file__).resolve().parents[2] / "aws" / "check-plan.py"
+SCHEDULER_INPUT = '{"action":"create_week","scheduled_time":"<aws.scheduler.scheduled-time>"}'
 
 
 @pytest.mark.parametrize(
@@ -78,9 +79,46 @@ GUARD = Path(__file__).resolve().parents[2] / "aws" / "check-plan.py"
     ],
 )
 def test_plan_guard(address: str, actions: list[str], accepted: bool) -> None:
-    plan = {
+    plan: dict[str, Any] = {
         "resource_changes": [
             {"address": address, "mode": "managed", "change": {"actions": actions}}
+        ]
+    }
+    if address == "aws_scheduler_schedule.create_week":
+        plan["resource_changes"][0]["change"]["after"] = {"target": [{"input": SCHEDULER_INPUT}]}
+    result = subprocess.run(  # noqa: S603 - fixed interpreter and repository script
+        [sys.executable, str(GUARD)], input=json.dumps(plan), text=True, capture_output=True
+    )
+    assert (result.returncode == 0) is accepted, result.stderr
+
+
+@pytest.mark.parametrize("actions", [["create"], ["update"], ["no-op"]])
+@pytest.mark.parametrize(
+    ("scheduler_input", "accepted"),
+    [
+        (SCHEDULER_INPUT, True),
+        (f"\n  {SCHEDULER_INPUT}\n", True),
+        (SCHEDULER_INPUT.replace("<", r"\u003c").replace(">", r"\u003e"), False),
+        (SCHEDULER_INPUT.replace("<", r"\u003c"), False),
+        (SCHEDULER_INPUT.replace(">", r"\u003e"), False),
+        (SCHEDULER_INPUT.replace("create_week", "poll_games"), False),
+        (SCHEDULER_INPUT.replace("scheduled_time", "other"), False),
+        (SCHEDULER_INPUT[:-1], False),
+        ("{}", False),
+        (None, False),
+    ],
+)
+def test_scheduler_input_guard(actions, scheduler_input, accepted):
+    plan = {
+        "resource_changes": [
+            {
+                "address": "aws_scheduler_schedule.create_week",
+                "mode": "managed",
+                "change": {
+                    "actions": actions,
+                    "after": {"target": [{"input": scheduler_input}]},
+                },
+            }
         ]
     }
     result = subprocess.run(  # noqa: S603 - fixed interpreter and repository script
