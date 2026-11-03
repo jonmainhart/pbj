@@ -34,7 +34,7 @@ for (const entry of [
 }
 
 test("announcements preserve line breaks and display text without interpreting HTML", async ({ page }) => {
-    await mockDashboard(page, { "/assets/announcement-top.txt": "  Hello\n<strong>Pool</strong>  " });
+    await mockDashboard(page, { "/data/announcements.json": {top:{text:"  Hello\n<strong>Pool</strong>  ",link:null}} });
     await page.goto("/");
     await expect(page.locator("#announcement-top")).toHaveText("Hello\n<strong>Pool</strong>");
     await expect(page.locator("#announcement-top")).toBeVisible();
@@ -43,8 +43,7 @@ test("announcements preserve line breaks and display text without interpreting H
 });
 
 test("failed announcements remain hidden without blocking the dashboard", async ({ page }) => {
-    await mockDashboard(page, { "/assets/announcement-top.txt": null });
-    await page.route("**/assets/announcement-bottom.txt", (route) => route.abort());
+    await mockDashboard(page, { "/data/announcements.json": null });
     await page.goto("/");
     await expect(page.locator("#week-status")).toHaveText("Week 1 In Progress");
     await expect(page.locator("#announcement-top")).toBeHidden();
@@ -91,3 +90,41 @@ test("refresh is suspended while a player card is open", async ({ page }) => {
     await response;
     await expect(page.locator("#player-list .player-name")).toHaveText("beth");
 });
+
+test('one announcement request renders safe links at both positions and refreshes on resume', async ({page}) => {
+    let requests = 0;
+    let current = {top:{text:'Top',link:{label:'Schedule',url:'https://example.com/week'}}, bottom:{text:'Bottom',link:{label:'Unsafe',url:'javascript:alert(1)'}}};
+    await mockDashboard(page, {'/data/announcements.json':() => { requests++; return current; }});
+    await page.goto('/');
+    await expect(page.locator('#announcement-top a')).toHaveAttribute('href','https://example.com/week');
+    await expect(page.locator('#announcement-bottom')).toHaveText('Bottom');
+    await expect(page.locator('#announcement-bottom a')).toHaveCount(0);
+    expect(requests).toBe(1);
+    current = {top:{text:'Changed',link:null},bottom:{text:'',link:null}};
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true})));
+    await expect(page.locator('#announcement-top')).toHaveText('Changed');
+    await expect(page.locator('#announcement-bottom')).toBeHidden();
+    expect(requests).toBe(2);
+});
+for (const value of [null, {}, {top:{text:42}}, {top:{text:''},bottom:{text:'   '}}]) {
+    test(`malformed or empty announcements stay hidden: ${JSON.stringify(value)}`, async ({page}) => {
+        await mockDashboard(page, {'/data/announcements.json':value});
+        await page.goto('/');
+        await expect(page.locator('#announcement-top')).toBeHidden();
+        await expect(page.locator('#announcement-bottom')).toBeHidden();
+        await expect(page.locator('#week-status')).toBeVisible();
+    });
+}
+
+for (const failure of ['network', 'invalid JSON']) {
+    test(`announcement ${failure} failure does not block the dashboard`, async ({page}) => {
+        await mockDashboard(page);
+        await page.route('**/data/announcements.json', route => failure === 'network'
+            ? route.abort()
+            : route.fulfill({contentType:'application/json',body:'broken'}));
+        await page.goto('/');
+        await expect(page.locator('#announcement-top')).toBeHidden();
+        await expect(page.locator('#announcement-bottom')).toBeHidden();
+        await expect(page.locator('#week-status')).toBeVisible();
+    });
+}

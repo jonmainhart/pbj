@@ -12,6 +12,7 @@
     <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png" />
     <title>PBJ · Commissioner</title>
     <link rel="stylesheet" href="/assets/admin.css" />
+    <link rel="stylesheet" href="/assets/announcements.css" />
   </head>
   <body class="bg-pbj-background text-pbj-ink min-h-screen">
     <main class="max-w-7xl mx-auto p-4 md:p-8 min-w-0">
@@ -48,6 +49,30 @@
         role="status"
         class="text-pbj-warning text-sm"
       ></p>
+      <nav id="portal-nav" hidden aria-label="Commissioner views" class="flex gap-3 mt-6">
+        <button id="view-picks" aria-pressed="true">Weekly Picks</button>
+        <button id="view-announcements" aria-pressed="false">Announcements</button>
+      </nav>
+      <section id="announcements-view" hidden class="announcement-form" aria-label="Announcements">
+        <h2 class="text-2xl">Announcements</h2>
+        <p>Changes stay here until you publish. Empty messages are hidden.</p>
+        <label for="top-text">Top announcement<textarea id="top-text" maxlength="2000"></textarea></label>
+        <details><summary>Optional top link</summary>
+          <label>Link label<input id="top-label" maxlength="120" /></label>
+          <label>Link URL<input id="top-url" type="url" maxlength="2048" /></label>
+        </details>
+        <label for="bottom-text">Bottom announcement<textarea id="bottom-text" maxlength="2000"></textarea></label>
+        <details><summary>Optional bottom link</summary>
+          <label>Link label<input id="bottom-label" maxlength="120" /></label>
+          <label>Link URL<input id="bottom-url" type="url" maxlength="2048" /></label>
+        </details>
+        <h3>Preview</h3>
+        <div id="preview-top" class="announcement" hidden></div>
+        <div id="preview-bottom" class="announcement" hidden></div>
+        <button id="publish-announcements" disabled>Publish Changes</button>
+        <button id="reload-announcements" hidden>Reload published content</button>
+        <p id="announcements-status" role="status" aria-live="polite"></p>
+      </section>
       <section id="editor" hidden class="space-y-5 mt-6 min-w-0">
         <div id="published-warning" hidden class="border border-pbj-border rounded-xl p-4 text-pbj-warning">
           <p>Picks have already been published for this week. Resubmitting changes may alter participant-facing results.</p>

@@ -46,6 +46,8 @@ ALLOWED.add("aws_s3_object.admin_config")
 ALLOWED.update(
     f'aws_apigatewayv2_route.admin["{route}"]'
     for route in (
+        "GET /announcements",
+        "PUT /announcements",
         "GET /schedules",
         "POST /schedules/next",
         "GET /weeks/{season}/{week}",

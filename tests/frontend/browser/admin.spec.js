@@ -1003,3 +1003,102 @@ test('uncertain creation refreshes metadata and preserves the selected editor wi
     expect(requests).toEqual([['POST','/schedules/next'],['GET','/schedules'],['GET','/weeks/2026/3']]);
     expect(creations).toBe(1);
 });
+
+test('announcement editing preserves picks and handles errors, conflicts, publication and clearing', async ({page}) => {
+    await authenticated(page);
+    let current = {top:{text:'Published',link:null},bottom:{text:'',link:null}};
+    let etag = null, failure = 0, reads = 0;
+    await page.route('https://admin.example/announcements', route => {
+        expect(route.request().headers().authorization).toBe('Bearer test-access');
+        if (route.request().method() === 'GET') {
+            reads++;
+            return route.fulfill({json:{document:current,etag}});
+        }
+        if (failure) return route.fulfill({status:failure,json:{message:failure === 409 ? 'Announcements changed' : 'Unavailable'}});
+        const body = route.request().postDataJSON();
+        expect(body.etag).toBe(etag);
+        current = body.document; etag = 'v2';
+        return route.fulfill({json:{document:current,etag}});
+    });
+    await page.getByLabel('Player 1 NAME',{exact:true}).fill('Alice');
+    await page.locator('#view-announcements').click();
+    await expect(page.locator('#top-text')).toHaveValue('Published');
+    await expect(page.locator('#publish-announcements')).toBeDisabled();
+    await page.locator('#top-text').fill('<b>Local</b>');
+    await page.locator('#bottom-text').fill('Bottom');
+    await expect(page.locator('#preview-top')).toHaveText('<b>Local</b>');
+    await expect(page.locator('#preview-top b')).toHaveCount(0);
+    await page.locator('#view-picks').click();
+    await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Alice');
+    await page.locator('#view-announcements').click();
+    expect(reads).toBe(1);
+    await expect(page.locator('#top-text')).toHaveValue('<b>Local</b>');
+    failure = 502;
+    await page.locator('#publish-announcements').click();
+    await expect(page.locator('#announcements-status')).toContainText('Your edits are preserved');
+    await expect(page.locator('#top-text')).toHaveValue('<b>Local</b>');
+    failure = 409;
+    await page.locator('#publish-announcements').click();
+    await expect(page.locator('#reload-announcements')).toBeVisible();
+    await expect(page.locator('#publish-announcements')).toBeDisabled();
+    page.once('dialog', dialog => dialog.dismiss());
+    await page.locator('#reload-announcements').click();
+    await expect(page.locator('#top-text')).toHaveValue('<b>Local</b>');
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('#reload-announcements').click();
+    await expect(page.locator('#top-text')).toHaveValue('Published');
+    failure = 0;
+    await page.locator('#top-text').fill('New message');
+    await page.locator('#publish-announcements').click();
+    await expect(page.locator('#announcements-status')).toHaveText('Announcements published.');
+    await expect(page.locator('#publish-announcements')).toBeDisabled();
+    await page.locator('#top-text').fill('');
+    await expect(page.locator('#preview-top')).toBeHidden();
+    await page.locator('#publish-announcements').click();
+    await expect(page.locator('#publish-announcements')).toBeDisabled();
+    expect(current.top.text).toBe('');
+    await page.setViewportSize({width:375,height:812});
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('announcement load failure can be retried without loading picks again', async ({page}) => {
+    await authenticated(page);
+    let fail = true, weeklyRequests = 0;
+    page.on('request', request => { if (request.url().startsWith('https://admin.example/weeks/')) weeklyRequests++; });
+    await page.route('https://admin.example/announcements', route => fail
+        ? route.fulfill({status:502,json:{message:'Unable to read announcements'}})
+        : route.fulfill({json:{document:{top:{text:'',link:null},bottom:{text:'',link:null}},etag:null}}));
+    await page.locator('#view-announcements').click();
+    await expect(page.locator('#announcements-status')).toHaveText('Unable to read announcements');
+    await expect(page.locator('#publish-announcements')).toBeDisabled();
+    fail = false;
+    await page.locator('#reload-announcements').click();
+    await expect(page.locator('#top-text')).toBeEnabled();
+    await page.locator('#top-text').fill('With link');
+    await page.getByText('Optional top link',{exact:true}).click();
+    await page.locator('#top-label').fill('Schedule');
+    await page.locator('#top-url').fill('https://example.com/schedule');
+    await expect(page.locator('#preview-top a')).toHaveAttribute('href','https://example.com/schedule');
+    expect(weeklyRequests).toBe(0);
+});
+
+test('active portal navigation is visible and follows the selected view on mobile', async ({page}) => {
+    await page.setViewportSize({width:375,height:812});
+    await authenticated(page);
+    await page.route('https://admin.example/announcements', route => route.fulfill({json:{document:{top:{text:'',link:null},bottom:{text:'',link:null}},etag:null}}));
+    const picks = page.locator('#view-picks'), announcements = page.locator('#view-announcements');
+    async function active(selected, inactive) {
+        await expect(selected).toHaveAttribute('aria-pressed','true');
+        await expect(inactive).toHaveAttribute('aria-pressed','false');
+        await expect(selected).toHaveCSS('background-color','rgb(82, 111, 105)');
+        await expect(selected).toHaveCSS('color','rgb(246, 241, 232)');
+        await expect(inactive).toHaveCSS('color','rgb(111, 119, 114)');
+        await expect(selected).toBeInViewport();
+        await expect(inactive).toBeInViewport();
+    }
+    await active(picks, announcements);
+    await announcements.click();
+    await active(announcements, picks);
+    await picks.click();
+    await active(picks, announcements);
+});

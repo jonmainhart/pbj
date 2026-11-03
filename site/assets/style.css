@@ -21,9 +21,6 @@
   --danger-light: #dd8d79;
   --warning: #d9a441;
 
-  --announcement-bg: #f0d8cc;
-  --announcement-text: #70483e;
-
   --radius: 14px;
 
   --shadow:
@@ -222,27 +219,6 @@ select:focus-visible {
 /*
  * Announcements
  */
-
-.announcement {
-  padding: 0.8rem 1rem;
-
-  text-align: center;
-  font-weight: 700;
-
-  background: var(--announcement-bg);
-  color: var(--announcement-text);
-
-  border-bottom: 2px solid var(--danger);
-
-  white-space: pre-wrap;
-}
-
-.announcement-bottom {
-  margin-top: 1rem;
-
-  border-top: 2px solid var(--danger);
-  border-bottom: 0;
-}
 
 /*
  * Header

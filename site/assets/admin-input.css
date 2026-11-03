@@ -33,6 +33,8 @@
  .header-editor { @apply relative min-h-12; }
  .header-cell input { @apply absolute inset-0 w-full h-full opacity-0 bg-pbj-surface; }
  .header-cell input:focus { @apply opacity-100; }
+ #portal-nav button { @apply text-pbj-muted; }
+ #portal-nav button[aria-pressed="true"] { @apply bg-pbj-header text-pbj-surface border-pbj-header; }
  #save { @apply bg-pbj-header text-pbj-surface border-pbj-header; }
  button:hover:not(:disabled) { @apply brightness-95; }
  #file { @apply max-w-full; }

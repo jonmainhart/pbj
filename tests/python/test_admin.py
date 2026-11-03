@@ -827,3 +827,199 @@ def test_multiple_unpublished_weeks_fail_closed(monkeypatch):
         == 409
     )
     processor.invoke.assert_not_called()
+
+
+def announcement_document():
+    return {"top": {"text": "Week 9", "link": None}, "bottom": {"text": "", "link": None}}
+
+
+def test_announcement_reads_missing_and_existing(monkeypatch):
+    client = setup_api(monkeypatch)
+    for snapshot in [None, storage.Snapshot(json.dumps(announcement_document()).encode(), '"v1"')]:
+
+        def read(s, c, key, snapshot=snapshot):
+            assert key == "data/announcements.json"
+            return snapshot
+
+        monkeypatch.setattr(storage, "read", read)
+        result = admin.lambda_handler(event("/announcements"), None)
+        assert result["statusCode"] == 200
+        body = json.loads(result["body"])
+        assert body["etag"] == (snapshot.etag if snapshot else None)
+        assert body["document"]["top"]["text"] == ("Week 9" if snapshot else "")
+    client.list_objects_v2.assert_not_called()
+
+
+@pytest.mark.parametrize("etag", [None, '"v1"'])
+def test_announcement_publication(monkeypatch, etag):
+    client = setup_api(monkeypatch)
+    result = admin.lambda_handler(
+        event("/announcements", "PUT", document=announcement_document(), etag=etag), None
+    )
+    assert result["statusCode"] == 200
+    call = client.put_object.call_args.kwargs
+    assert call["Bucket"] == "private"
+    assert call["Key"] == "data/announcements.json"
+    assert json.loads(call["Body"]) == announcement_document()
+    assert call["IfMatch" if etag else "IfNoneMatch"] == (etag or "*")
+    assert json.loads(result["body"])["etag"] == "new-version"
+
+
+def test_announcement_conflict_and_required_version(monkeypatch):
+    client = setup_api(monkeypatch)
+    assert (
+        admin.lambda_handler(
+            event("/announcements", "PUT", document=announcement_document()), None
+        )["statusCode"]
+        == 400
+    )
+    for code in ["PreconditionFailed", "ConditionalRequestConflict", "AccessDenied"]:
+        client.put_object.side_effect = ClientError({"Error": {"Code": code}}, "PutObject")
+        result = admin.lambda_handler(
+            event("/announcements", "PUT", document=announcement_document(), etag=None), None
+        )
+        assert result["statusCode"] == (502 if code == "AccessDenied" else 409)
+        assert code not in result["body"]
+
+
+@pytest.mark.parametrize(
+    "link",
+    [
+        {"label": "Schedule", "url": "https://example.com/week?x=1"},
+        {"label": "Schedule", "url": "http://example.com"},
+    ],
+)
+def test_announcement_valid_links(link):
+    value = announcement_document()
+    value["top"]["link"] = link
+    assert admin.validate_announcements(value) == value
+
+
+@pytest.mark.parametrize(
+    "link",
+    [
+        False,
+        {},
+        {"label": " ", "url": "https://example.com"},
+        {"label": "Go", "url": "javascript:alert(1)"},
+        {"label": "Go", "url": "/relative"},
+        {"label": "Go", "url": "https://"},
+        {"label": "Go", "url": "https://example.com:bad"},
+        {"label": "Go", "url": "https://example.com/ bad"},
+    ],
+)
+def test_announcement_invalid_links(link):
+    value = announcement_document()
+    value["top"]["link"] = link
+    with pytest.raises(ValueError):
+        admin.validate_announcements(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        {},
+        {"top": {}, "bottom": {}},
+        {"top": {"text": "x" * 2001, "link": None}, "bottom": {"text": "", "link": None}},
+    ],
+)
+def test_announcement_invalid_documents(value):
+    with pytest.raises(ValueError):
+        admin.validate_announcements(value)
+
+
+def test_announcement_request_size_and_routes(monkeypatch):
+    client = setup_api(monkeypatch)
+    assert (
+        admin.lambda_handler(event("/announcements", "PUT", document="x" * 25000, etag=None), None)[
+            "statusCode"
+        ]
+        == 413
+    )
+    assert admin.lambda_handler(event("/announcements", "DELETE"), None)["statusCode"] == 405
+    denied = event("/announcements", "PUT", document=announcement_document(), etag=None)
+    denied["requestContext"]["authorizer"]["jwt"]["claims"]["scope"] = "openid"
+    assert admin.lambda_handler(denied, None)["statusCode"] == 403
+    client.put_object.assert_not_called()
+
+
+def test_announcement_missing_object_uses_direct_read(monkeypatch):
+    from botocore.stub import Stubber
+
+    monkeypatch.setenv("PBJ_DATA_BUCKET", "private")
+    monkeypatch.setenv("PBJ_DATA_PREFIX", "data/")
+    monkeypatch.setenv("PBJ_ADMIN_CLIENT_ID", "spa")
+    client = boto3.client(
+        "s3",
+        region_name="us-east-2",
+        aws_access_key_id="test",
+        aws_secret_access_key="test",  # noqa: S106
+    )
+    monkeypatch.setattr(storage, "client", lambda: client)
+    with Stubber(client) as stub:
+        stub.add_client_error(
+            "get_object",
+            service_error_code="NoSuchKey",
+            http_status_code=404,
+            expected_params={"Bucket": "private", "Key": "data/announcements.json"},
+        )
+        result = admin.lambda_handler(event("/announcements"), None)
+        assert result["statusCode"] == 200
+        assert json.loads(result["body"]) == {
+            "document": {position: {"text": "", "link": None} for position in ("top", "bottom")},
+            "etag": None,
+        }
+        stub.assert_no_pending_responses()
+
+
+@pytest.mark.parametrize(
+    ("listed", "list_error", "expected_status"),
+    [
+        ([], None, 200),
+        (["data/announcements.json.backup"], None, 200),
+        (["data/announcements.json"], None, 502),
+        ([], "AccessDenied", 502),
+    ],
+)
+def test_announcement_denied_read_checks_exact_key(
+    monkeypatch, listed, list_error, expected_status
+):
+    real_read = storage.read
+    client = setup_api(monkeypatch)
+    monkeypatch.setattr(storage, "read", real_read)
+    client.get_object.side_effect = ClientError({"Error": {"Code": "AccessDenied"}}, "GetObject")
+    client.list_objects_v2.return_value = {"Contents": [{"Key": key} for key in listed]}
+    if list_error:
+        client.list_objects_v2.side_effect = ClientError(
+            {"Error": {"Code": list_error}}, "ListObjectsV2"
+        )
+    result = admin.lambda_handler(event("/announcements"), None)
+    assert result["statusCode"] == expected_status
+    client.get_object.assert_called_once_with(Bucket="private", Key="data/announcements.json")
+    client.list_objects_v2.assert_called_once_with(
+        Bucket="private", Prefix="data/announcements.json", MaxKeys=1
+    )
+    body = json.loads(result["body"])
+    if expected_status == 200:
+        assert body == {
+            "document": {position: {"text": "", "link": None} for position in ("top", "bottom")},
+            "etag": None,
+        }
+    else:
+        assert "document" not in body
+        assert "AccessDenied" not in body["message"]
+
+
+def test_announcement_existing_direct_read_does_not_list(monkeypatch):
+    real_read = storage.read
+    client = setup_api(monkeypatch)
+    monkeypatch.setattr(storage, "read", real_read)
+    client.get_object.return_value = {
+        "Body": BytesIO(json.dumps(announcement_document()).encode()),
+        "ETag": "version",
+    }
+    result = admin.lambda_handler(event("/announcements"), None)
+    assert result["statusCode"] == 200
+    assert json.loads(result["body"]) == {"document": announcement_document(), "etag": "version"}
+    client.list_objects_v2.assert_not_called()

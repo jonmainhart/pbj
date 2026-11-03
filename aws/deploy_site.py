@@ -14,8 +14,6 @@ STATIC_FILES = {
     "admin/index.html",
     "manifest.webmanifest",
     *PUBLIC_FILES,
-    "assets/announcement-top.txt",
-    "assets/announcement-bottom.txt",
 }
 ASSET_SUFFIXES = {".js", ".css", ".html", ".json", ".png", ".jpg", ".jpeg", ".svg", ".ico", ".webp"}
 

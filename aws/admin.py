@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 import boto3
 from botocore.config import Config
@@ -53,14 +54,22 @@ def lambda_handler(event: Any, context: Any) -> dict[str, Any]:
             )
         if code == "NoSuchKey":
             return response(404, {"message": "No schedule available for the selected week"})
+        if event.get("rawPath") == "/announcements":
+            return response(
+                502, {"message": "Announcement request failed. Your edits are preserved."}
+            )
         return response(502, {"message": "AWS operation failed; draft preserved. Retry safely."})
     except (ValueError, KeyError, TypeError) as exc:
         return response(400, {"message": str(exc)})
     except Exception:
+        if event.get("rawPath") == "/announcements":
+            return response(
+                502, {"message": "Announcement request failed. Your edits are preserved."}
+            )
         return response(502, {"message": "Operation failed; reopen the draft before retrying."})
 
 
-def read_private_csv(
+def read_commissioner_object(
     s3: "S3Client", config: storage.StorageConfig, key: str
 ) -> storage.Snapshot | None:
     """Confirm absence on denied reads without hiding genuine permission errors."""
@@ -137,11 +146,101 @@ def create_next(
     )
 
 
+def validate_announcements(value: Any) -> dict[str, Any]:
+    """Validate the complete, deliberately small public document."""
+    if not isinstance(value, dict) or set(value) != {"top", "bottom"}:
+        raise ValueError("Provide top and bottom announcements")
+    for item in value.values():
+        if not isinstance(item, dict) or set(item) != {"text", "link"}:
+            raise ValueError("Each announcement requires text and link")
+        if not isinstance(item["text"], str) or len(item["text"]) > 2000:
+            raise ValueError("Announcement text must be at most 2000 characters")
+        link = item["link"]
+        if link is None:
+            continue
+        if not isinstance(link, dict) or set(link) != {"label", "url"}:
+            raise ValueError("Link requires label and URL")
+        if not isinstance(link["label"], str) or not 1 <= len(link["label"].strip()) <= 120:
+            raise ValueError("Link label must be 1-120 characters")
+        url = link["url"]
+        if not isinstance(url, str) or not 1 <= len(url) <= 2048:
+            raise ValueError("Invalid link URL")
+        parsed = urlsplit(url)
+        if (
+            parsed.scheme not in ("http", "https")
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or any(c.isspace() or ord(c) < 32 for c in url)
+            or "\\" in url
+        ):
+            raise ValueError("Link must be an absolute HTTP or HTTPS URL")
+        _ = parsed.port
+    return value
+
+
+def announcements(
+    event: dict[str, Any], s3: "S3Client", config: storage.StorageConfig
+) -> dict[str, Any]:
+    method = event["requestContext"]["http"]["method"]
+    key = "data/announcements.json"
+    if method == "GET":
+        snapshot = read_commissioner_object(s3, config, key)
+        document = (
+            validate_announcements(json.loads(snapshot.content))
+            if snapshot
+            else {position: {"text": "", "link": None} for position in ("top", "bottom")}
+        )
+        return response(200, {"document": document, "etag": snapshot.etag if snapshot else None})
+    if method != "PUT":
+        return response(405, {"message": "Method not allowed"})
+    raw = event.get("body") or ""
+    if len(raw) > 24000:
+        return response(413, {"message": "Announcement request exceeds 16 KB"})
+    if event.get("isBase64Encoded"):
+        raw = base64.b64decode(raw, validate=True).decode()
+    if len(raw.encode()) > 16384:
+        return response(413, {"message": "Announcement request exceeds 16 KB"})
+    body = json.loads(raw)
+    if not isinstance(body, dict) or set(body) != {"document", "etag"}:
+        raise ValueError("Provide the complete document and last-read etag")
+    etag = body["etag"]
+    if etag is not None and (
+        not isinstance(etag, str) or not etag or len(etag) > 128 or "*" in etag
+    ):
+        raise ValueError("Invalid announcement version")
+    document = validate_announcements(body["document"])
+    try:
+        saved = s3.put_object(
+            Bucket=config.bucket,
+            Key=key,
+            Body=json.dumps(document).encode(),
+            ContentType="application/json",
+            CacheControl="no-store",
+            **condition(etag),
+        )
+    except ClientError as exc:
+        if exc.response["Error"]["Code"] in ("PreconditionFailed", "ConditionalRequestConflict"):
+            return response(
+                409,
+                {
+                    "message": (
+                        "Announcements changed in another session. "
+                        "Reload published content before publishing."
+                    )
+                },
+            )
+        raise
+    return response(200, {"document": document, "etag": saved["ETag"]})
+
+
 def dispatch(event: dict[str, Any]) -> dict[str, Any]:
     config = storage.StorageConfig.from_environment()
     s3 = storage.client()
     method = event["requestContext"]["http"]["method"]
     path = event["rawPath"]
+    if path == "/announcements":
+        return announcements(event, s3, config)
     if method == "POST" and path == "/schedules/next":
         return create_next(event, s3, config)
     if method == "GET" and path == "/schedules":
@@ -167,7 +266,7 @@ def dispatch(event: dict[str, Any]) -> dict[str, Any]:
     key = f"incoming/{season}/drafts/week{week:02d}.csv"
     published = bool(json.loads(schedule.content).get("players", []))
     if method == "GET" and action is None:
-        draft = read_private_csv(s3, config, key)
+        draft = read_commissioner_object(s3, config, key)
         text = (
             draft.content.decode("utf-8-sig")
             if draft is not None
@@ -197,7 +296,7 @@ def dispatch(event: dict[str, Any]) -> dict[str, Any]:
     if method == "DELETE" and action == "draft":
         if etag is None:
             raise ValueError("Draft version required for deletion")
-        draft = read_private_csv(s3, config, key)
+        draft = read_commissioner_object(s3, config, key)
         if draft is None:
             return response(404, {"message": "No saved draft exists"})
         if draft.etag != etag:
@@ -241,7 +340,7 @@ def dispatch(event: dict[str, Any]) -> dict[str, Any]:
     if action == "draft":
         return response(200, result)
     submitted_key = f"incoming/{season}/week{week:02d}.csv"
-    previous = read_private_csv(s3, config, submitted_key)
+    previous = read_commissioner_object(s3, config, submitted_key)
     if previous and previous.content != result["csv"].encode():
         metadata = s3.head_object(Bucket=config.bucket, Key=submitted_key).get("Metadata", {})
         if metadata.get("state") != "complete":

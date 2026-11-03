@@ -302,12 +302,17 @@ The builder replaces `build/site` with public root files, assets, dashboard JSON
 
 ## Announcements
 
-Optional announcements are read from:
+Commissioners manage both announcements in the portal's Announcements view. Edit and
+preview messages and optional HTTP(S) links, then select Publish Changes. Empty
+messages are hidden. Conflicts preserve local edits; Reload published content asks
+before discarding them. Announcements have no device draft persistence.
 
-- `site/assets/announcement-top.txt`
-- `site/assets/announcement-bottom.txt`
+The authenticated GET/PUT `/announcements` API reads and conditionally writes one
+runtime-managed `data/announcements.json` object in the operational bucket. The
+public dashboard reads it through CloudFront with no-store caching and refreshes
+when a suspended page resumes. Static builds and uploads exclude this object.
 
-Empty files remain hidden. Existing line breaks are preserved.
+Empty messages remain hidden. Existing line breaks are preserved.
 
 ## Development
 

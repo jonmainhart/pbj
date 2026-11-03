@@ -36,6 +36,7 @@ def test_site_contains_public_assets_and_json_but_not_private_or_development_fil
     (source / "site" / "assets" / "documents" / "rules.html").write_text("stale", encoding="utf-8")
     (source / "data" / "2026").mkdir(parents=True)
     (source / "data" / "available-weeks.json").write_text("{}", encoding="utf-8")
+    (source / "data" / "announcements.json").write_text("{}", encoding="utf-8")
     (source / "data" / "2026" / "week01.json").write_text("{}", encoding="utf-8")
     (source / "data" / "2026" / "week01.csv").write_text("private import", encoding="utf-8")
     (source / "data" / "raw").mkdir()
@@ -61,6 +62,7 @@ def test_site_contains_public_assets_and_json_but_not_private_or_development_fil
     assert not (output / "private.csv").exists()
     assert not (output / "data" / "2026" / "week01.csv").exists()
     assert not (output / "data" / "raw").exists()
+    assert not (output / "data" / "announcements.json").exists()
     assert (source / "site" / "assets" / "documents" / "rules.html").read_text() == "stale"
 
 

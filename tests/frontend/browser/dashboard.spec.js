@@ -36,10 +36,6 @@ test("weekly dashboard loads and a player card opens and closes", { tag: "@smoke
             await route.fulfill({ status: 404 });
         }
     });
-    await page.route("**/assets/announcement-*.txt", (route) =>
-        route.fulfill({ contentType: "text/plain", body: "" }),
-    );
-
     await page.goto("/");
 
     await expect(page.getByRole("heading", { name: "PBJ Football" })).toBeVisible();

@@ -34,11 +34,10 @@ export async function mockDashboard(page, responses = {}) {
         "/data/available-weeks.json": { "2026": [1] },
         "/data/2026/week01.json": week(),
         "/data/2026/season.json": { season: 2026, weeks_scored: [], players: [] },
-        "/assets/announcement-top.txt": "",
-        "/assets/announcement-bottom.txt": "",
+        "/data/announcements.json": {top:{text:"",link:null},bottom:{text:"",link:null}},
         ...responses,
     };
-    await page.route(/\/(data\/.*|assets\/announcement-.*\.txt)$/, async (route) => {
+    await page.route(/\/data\/.*$/, async (route) => {
         const path = new URL(route.request().url()).pathname;
         const value = typeof routes[path] === "function" ? routes[path]() : routes[path];
         if (value === undefined || value === null) {

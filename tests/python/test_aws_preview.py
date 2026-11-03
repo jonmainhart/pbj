@@ -13,6 +13,7 @@ def test_upload_only_public_static_files(tmp_path):
     artifact = tmp_path / "site"
     build_site(ROOT, artifact)
     (artifact / "private.csv").write_text("private")
+    (artifact / "data/announcements.json").write_text("{}")
     (artifact / "assets/admin-config.json").write_text("{}")
     (artifact / "BALLDONTLIE.key").write_text("secret")
     calls = []
@@ -28,8 +29,6 @@ def test_upload_only_public_static_files(tmp_path):
         "manifest.webmanifest",
         "assets/app.js",
         "assets/img/logo-transparent-full.png",
-        "assets/announcement-top.txt",
-        "assets/announcement-bottom.txt",
         "assets/documents/rules.html",
         "LEGAL.md",
     } <= keys
@@ -87,3 +86,24 @@ def test_operational_policy_is_owned_directly_and_scoped_to_preview():
         ("aws_s3_bucket_policy", "preview"),
         ("aws_s3_bucket_policy", "preview_data"),
     }
+
+
+def test_announcement_routes_and_object_scoped_write():
+    config = (ROOT / "aws/terraform/admin.tf").read_text()
+    for route in ["GET /announcements", "PUT /announcements"]:
+        assert f'"{route}"' in config
+    assert 'authorization_scopes = ["pbj/admin"]' in config
+    assert (
+        'Action = "s3:PutObject", Resource = '
+        '"arn:aws:s3:::${local.data_bucket}/data/announcements.json"'
+    ) in config
+    assert (
+        'Action = "s3:GetObject", Resource = "arn:aws:s3:::${local.data_bucket}/data/*"' in config
+    )
+    assert (
+        'Action = "s3:ListBucket", Resource = "arn:aws:s3:::${local.data_bucket}", '
+        'Condition = { StringLike = { "s3:prefix" = ["data/", "data/*"] } }'
+    ) in config
+    assert (
+        'Action = "s3:ListBucket", Resource = "arn:aws:s3:::${local.data_bucket}" }' not in config
+    )

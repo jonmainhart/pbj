@@ -69,6 +69,8 @@ GUARD = Path(__file__).resolve().parents[2] / "aws" / "check-plan.py"
             )
         ],
         ('aws_apigatewayv2_route.admin["POST /schedules/next"]', ["create"], True),
+        ('aws_apigatewayv2_route.admin["GET /announcements"]', ["create"], True),
+        ('aws_apigatewayv2_route.admin["PUT /announcements"]', ["create"], True),
         ('aws_apigatewayv2_route.admin["DELETE /weeks/{season}/{week}"]', ["create"], False),
         ("aws_s3_object.picks", ["create"], False),
         ("aws_iam_role.power_user", ["update"], False),

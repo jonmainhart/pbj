@@ -1,3 +1,4 @@
+import {announcementEditor} from './admin-announcements.js';
 import {parseCSV, toCSV, canSwitch, restoreHeaders, resolveCSVHeaders, matchupFor, needsHeaderRepair} from './admin-model.js';
 import {beginLogin, finishLogin, createSession, SessionExpired} from './admin-auth.js';
 import {createDraft, readRecovery, recoveryScope, recoveryKey} from './admin-draft.js';
@@ -7,6 +8,7 @@ let intentionalNavigation = false;
 let expectedHeaders = [], games = [], drafts, scope, recovery, recoveryReview = false;
 let config, session, catalog, selection, table = {headers: [], rows: []}, busy = false;
 let published = false, locked = false;
+const announcements = announcementEditor(api);
 const unsaved = () => Boolean(drafts?.dirty);
 const status = text => { $('status').textContent = text; };
 function changed() {
@@ -203,6 +205,7 @@ $('discard-device').onclick = () => {
     catch { $('recovery-status').textContent = 'Unable to discard the device copy. Browser storage is unavailable.'; }
 };
 $('login').onclick = () => {
+    if (announcements.dirty() && !confirm('Announcement edits are not saved. Continue to sign in and discard them?')) return;
     if (unsaved()) {
         drafts.edit(table); drafts.pause(true);
         if ($('recovery-status').textContent && !confirm('Device recovery may be unavailable. Copy your work before continuing to sign in. Continue?')) return;
@@ -211,6 +214,7 @@ $('login').onclick = () => {
     beginLogin(config).catch(error => { intentionalNavigation = false; status(error.message); });
 };
 $('logout').onclick = () => task(async () => {
+    if (announcements.dirty() && !confirm('Sign out and discard unpublished announcement edits?')) return;
     if (unsaved() && !confirm('Sign out with unsaved work? A recovery copy will remain on this device for this account, if browser storage is available.')) return;
     drafts?.dispose(); session.clear();
     $('editor').hidden = true; $('recovery').hidden = true;
@@ -307,7 +311,7 @@ $('submit').onclick = () => task(async () => {
     await open(selection); status(result.message);
 });
 window.addEventListener('online', () => { if (unsaved() && !locked && !busy && !recoveryReview) void drafts?.save().catch(() => {}); });
-window.addEventListener('beforeunload', event => { if (!intentionalNavigation && (unsaved() || busy)) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if (!intentionalNavigation && (unsaved() || busy || announcements.dirty() || announcements.busy)) { event.preventDefault(); event.returnValue = ''; } });
 try {
     const res = await fetch('/assets/admin-config.json', {cache: 'no-store'});
     if (!res.ok) throw new Error('Portal configuration is not installed. See AWS setup instructions.');
@@ -323,6 +327,14 @@ try {
             if (saved && catalog.seasons[saved.season]?.includes(saved.week)) next = saved;
         } catch { $('recovery-status').textContent = 'Device recovery is unavailable. Keep this page open until Save Draft succeeds.'; }
         await open(next);
+        $('portal-nav').hidden = false;
         $('editor').hidden = false; $('logout').hidden = false; $('login').hidden = true;
     }
 } catch (error) { status(error.message); }
+
+for (const view of ['picks', 'announcements']) $('view-' + view).onclick = () => {
+    $('editor').hidden = view !== 'picks';
+    $('announcements-view').hidden = view !== 'announcements';
+    for (const name of ['picks', 'announcements']) $('view-' + name).setAttribute('aria-pressed', String(name === view));
+    if (view === 'announcements') announcements.open();
+};
