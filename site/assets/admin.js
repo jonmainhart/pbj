@@ -5,6 +5,7 @@ import {createDraft, readRecovery, recoveryScope, recoveryKey} from './admin-dra
 const device = {getItem:key => localStorage.getItem(key), setItem:(key, value) => localStorage.setItem(key, value), removeItem:key => localStorage.removeItem(key)};
 const $ = id => document.getElementById(id);
 let intentionalNavigation = false;
+let signingIn = false, initializing = false, retryInitialization = false;
 let expectedHeaders = [], games = [], drafts, scope, recovery, recoveryReview = false;
 let config, session, catalog, selection, table = {headers: [], rows: []}, busy = false;
 let published = false, locked = false, controlState;
@@ -16,6 +17,8 @@ function changed() {
     drafts.pause(locked || busy || recoveryReview || Boolean(table.needsHeaderChoice));
 }
 function sessionExpired() {
+    retryInitialization = false;
+    $('login').disabled = false;
     $('login').hidden = false; $('login').textContent = 'Sign in to continue';
     $('logout').hidden = true;
     status('Session expired — sign in to continue. Your edits are still here.');
@@ -208,13 +211,19 @@ $('discard-device').onclick = () => {
     catch { $('recovery-status').textContent = 'Unable to discard the device copy. Browser storage is unavailable.'; }
 };
 $('login').onclick = () => {
+    if (signingIn || initializing || !config) return;
+    if (retryInitialization) { void initializePortal(); return; }
     if (announcements.dirty() && !confirm('Announcement edits are not saved. Continue to sign in and discard them?')) return;
     if (unsaved()) {
         drafts.edit(table); drafts.pause(true);
         if ($('recovery-status').textContent && !confirm('Device recovery may be unavailable. Copy your work before continuing to sign in. Continue?')) return;
     }
+    const loginLabel = $('login').textContent;
+    signingIn = true; $('login').disabled = true; $('login').textContent = 'Signing in ...'; status('Opening sign-in…');
     intentionalNavigation = true;
-    beginLogin(config).catch(error => { intentionalNavigation = false; status(error.message); });
+    beginLogin(config).catch(error => {
+        intentionalNavigation = false; signingIn = false; $('login').disabled = false; $('login').textContent = loginLabel; status(error.message);
+    });
 };
 $('logout').onclick = () => task(async () => {
     if (announcements.dirty() && !confirm('Sign out and discard unpublished announcement edits?')) return;
@@ -315,12 +324,11 @@ $('submit').onclick = () => task(async () => {
 });
 window.addEventListener('online', () => { if (unsaved() && !locked && !busy && !recoveryReview) void drafts?.save().catch(() => {}); });
 window.addEventListener('beforeunload', event => { if (!intentionalNavigation && (unsaved() || busy || announcements.dirty() || announcements.busy)) { event.preventDefault(); event.returnValue = ''; } });
-try {
-    const res = await fetch('/assets/admin-config.json', {cache: 'no-store'});
-    if (!res.ok) throw new Error('Portal configuration is not installed. See AWS setup instructions.');
-    config = await res.json(); const tokens = await finishLogin(config);
-    if (tokens) {
-        session = createSession(config, tokens);
+async function initializePortal() {
+    if (initializing) return;
+    initializing = true; retryInitialization = false; $('login').disabled = true; $('login').textContent = 'Signing in ...';
+    status('Signed in. Loading commissioner portal…');
+    try {
         catalog = await api('/schedules');
         if (typeof catalog.user_id !== 'string' || !catalog.user_id) throw new Error('Commissioner identity could not be verified.');
         scope = recoveryScope(config, catalog.user_id);
@@ -332,8 +340,31 @@ try {
         await open(next);
         $('portal-nav').hidden = false;
         $('editor').hidden = false; $('logout').hidden = false; $('login').hidden = true;
+    } catch (error) {
+        if (error instanceof SessionExpired) sessionExpired();
+        else {
+            retryInitialization = true;
+            $('login').textContent = 'Retry loading portal';
+            status(`Unable to load commissioner portal: ${error.message} Retry loading with your current session.`);
+        }
+    } finally {
+        initializing = false; $('login').disabled = false;
     }
-} catch (error) { status(error.message); }
+}
+const callback = new URLSearchParams(location.search);
+if (callback.has('code') || callback.has('error')) {
+    signingIn = true; $('login').disabled = true; $('login').textContent = 'Signing in ...'; status('Completing sign-in…');
+}
+try {
+    const res = await fetch('/assets/admin-config.json', {cache: 'no-store'});
+    if (!res.ok) throw new Error('Portal configuration is not installed. See AWS setup instructions.');
+    config = await res.json(); const tokens = await finishLogin(config);
+    if (tokens) {
+        session = createSession(config, tokens);
+        await initializePortal();
+    }
+} catch (error) { $('login').textContent = 'Sign in'; status(error.message); }
+finally { signingIn = false; $('login').disabled = false; }
 
 for (const view of ['picks', 'announcements']) $('view-' + view).onclick = () => {
     $('editor').hidden = view !== 'picks';

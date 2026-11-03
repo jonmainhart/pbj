@@ -1,9 +1,9 @@
 import {test, expect} from '@playwright/test';
 
-async function authenticated(page, {user = 'commissioner', etag = null, rows = [], published = false, selected, unpublished = false, games, headers} = {}) {
+async function authenticated(page, {user = 'commissioner', etag = null, rows = [], published = false, selected, unpublished = false, games, headers, waitForReady = true, intercept = (_route, next) => next()} = {}) {
     await page.route('**/assets/admin-config.json', route => route.fulfill({json:{api:'https://admin.example',domain:'https://login.example',clientId:'spa',redirectUri:'http://127.0.0.1:8000/admin/'}}));
-    await page.route('https://login.example/oauth2/token', route => route.fulfill({json:{access_token:'test-access',refresh_token:'test-refresh',expires_in:1800}}));
-    await page.route('https://admin.example/**', route => {
+    await page.route('https://login.example/oauth2/token', route => intercept(route, () => route.fulfill({json:{access_token:'test-access',refresh_token:'test-refresh',expires_in:1800}})));
+    await page.route('https://admin.example/**', route => intercept(route, () => {
         expect(route.request().headers().authorization).toBe('Bearer test-access');
         const path = new URL(route.request().url()).pathname;
         if (path === '/schedules') return route.fulfill({json:{seasons:{2026:[1,2,3]},season:2026,week:2,user_id:user}});
@@ -11,17 +11,19 @@ async function authenticated(page, {user = 'commissioner', etag = null, rows = [
         if (path.endsWith('/draft')) return route.fulfill({json:{etag:'saved',issues:[]}});
         if (path.endsWith('/submit')) return route.fulfill({json:{etag:'submitted',issues:[],message:'Picks submitted and processed',result:{status:'ok'}}});
         return route.fulfill({json:{games:games || [{id:'game',away:path.includes('/1')?'JAX':'NE',home:path.includes('/1')?'WSH':'SEA'}],headers:headers || ['NAME',path.includes('/1')?'JAX WSH':'NE SEA','TIEBREAKER'], rows, etag, published, source:etag ? 'draft' : published ? 'published' : 'empty', issues:[]}});
-    });
+    }));
     if (selected) await page.addInitScript(value => localStorage.setItem('pbj.draft.' + JSON.stringify(['https://admin.example','spa','commissioner']) + '.selection', JSON.stringify(value)), selected);
     await page.addInitScript(() => sessionStorage.setItem('pbj.pkce', JSON.stringify({verifier:'verifier',state:'state',created:Date.now()})));
     await page.goto('/admin/?code=code&state=state');
-    await expect(page.locator('#editor')).toBeVisible();
+    if (waitForReady) await expect(page.locator('#editor')).toBeVisible();
 }
 test('public shell requires sign-in', {tag:'@smoke'}, async ({page}) => {
     await page.route('**/assets/admin-config.json', route => route.fulfill({json:{}}));
     await page.goto('/admin/');
     await expect(page.locator('#editor')).toBeHidden();
     await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeVisible();
+    await expect(page.locator('#login')).toBeEnabled();
+    await expect(page.locator('#status')).toHaveText('Sign in with your commissioner account to begin.');
 });
 test('current default, editing, draft save and schedule switching', {tag:'@smoke'}, async ({page}) => {
     await authenticated(page);
@@ -54,6 +56,7 @@ test('PKCE callback rejects mismatched state', async ({page}) => {
     await page.route('**/assets/admin-config.json', route => route.fulfill({json:{domain:'https://login.example'}}));
     await page.goto('/admin/?code=stolen&state=invalid');
     await expect(page.locator('#status')).toContainText('Invalid or expired login state');
+    await expect(page.getByRole('button', {name:'Sign in',exact:true})).toBeEnabled();
     await expect(page.locator('#editor')).toBeHidden();
 });
 test('mobile editor keeps wide picks table inside a scroll region', async ({page}) => {
@@ -1142,4 +1145,118 @@ test('full roster edits retain recovery synchronously without rescanning control
     await page.clock.fastForward(3000);
     await expect(page.locator('#dirty')).toHaveText('All changes saved');
     expect(requests.filter(url => url.endsWith('/draft'))).toHaveLength(1);
+});
+
+for (const stage of ['token', 'catalog', 'week']) {
+    test(`sign-in handoff stays private while ${stage} is pending`, async ({page}) => {
+        let release;
+        const pending = new Promise(resolve => { release = resolve; });
+        const target = stage === 'token' ? 'https://login.example/oauth2/token'
+            : stage === 'catalog' ? 'https://admin.example/schedules' : 'https://admin.example/weeks/2026/2';
+        await authenticated(page, {waitForReady:false, intercept:async (route, next) => {
+            if (route.request().url() === target) await pending;
+            return next();
+        }});
+        await expect(page.locator('#status')).toHaveText(stage === 'token' ? 'Completing sign-in…' : 'Signed in. Loading commissioner portal…');
+        await expect(page.locator('#login')).toBeVisible();
+        await expect(page.locator('#login')).toBeDisabled();
+        await expect(page.locator('#login')).toHaveText('Signing in ...');
+        for (const id of ['editor', 'portal-nav', 'logout', 'announcements-view']) await expect(page.locator('#' + id)).toBeHidden();
+        await page.locator('#login').evaluate(button => { button.click(); button.click(); });
+        release();
+        await expect(page.locator('#editor')).toBeVisible();
+        await expect(page.locator('#login')).toBeHidden();
+        await expect(page.locator('#logout')).toBeVisible();
+    });
+}
+
+for (const stage of ['catalog', 'week', 'identity', 'expired', 'exchange', 'declined']) {
+    test(`sign-in ${stage} failure offers appropriate recovery`, async ({page}) => {
+        let failed = true, tokens = 0;
+        const requests = [];
+        let releaseRetry;
+        const retryPending = new Promise(resolve => { releaseRetry = resolve; });
+        const intercept = async (route, next) => {
+            const path = new URL(route.request().url()).pathname;
+            requests.push(path);
+            if (path === '/oauth2/token') {
+                tokens++;
+                if (stage === 'exchange') return route.fulfill({status:400,json:{}});
+            }
+            if (failed && ((stage === 'catalog' && path === '/schedules') || (stage === 'week' && path.startsWith('/weeks/')))) return route.fulfill({status:503,json:{message:'Temporarily unavailable'}});
+            if (stage === 'identity' && path === '/schedules') return route.fulfill({json:{seasons:{2026:[2]},season:2026,week:2}});
+            if (stage === 'expired' && path === '/schedules') return route.fulfill({status:403,json:{}});
+            if (!failed && path === '/schedules') await retryPending;
+            return next();
+        };
+        // Set up mocks without waiting for a ready editor on this failed visit.
+        await authenticated(page, {waitForReady:false, intercept});
+        if (stage === 'declined') {
+            await expect(page.locator('#editor')).toBeVisible();
+            await page.goto('/admin/?error=access_denied');
+        }
+        const retry = stage === 'catalog' || stage === 'week' || stage === 'identity';
+        await expect(page.locator('#status')).toContainText(retry ? 'Unable to load commissioner portal' : stage === 'exchange' ? 'Sign-in exchange failed' : stage === 'declined' ? 'Sign-in was declined' : 'Session expired');
+        await expect(page.locator('#editor')).toBeHidden();
+        await expect(page.locator('#login')).toBeVisible();
+        await expect(page.locator('#login')).toBeEnabled();
+        await expect(page.locator('#login')).toHaveText(retry ? 'Retry loading portal' : stage === 'expired' ? 'Sign in to continue' : 'Sign in');
+        if (stage === 'catalog' || stage === 'week') {
+            failed = false;
+            await page.locator('#login').evaluate(button => { button.click(); button.click(); });
+            await expect(page.locator('#login')).toBeVisible();
+            await expect(page.locator('#login')).toBeDisabled();
+            await expect(page.locator('#login')).toHaveText('Signing in ...');
+            await expect(page.locator('#status')).toHaveText('Signed in. Loading commissioner portal…');
+            releaseRetry();
+            await expect(page.locator('#editor')).toBeVisible();
+            await expect(page.locator('#login')).toBeHidden();
+            expect(tokens).toBe(1);
+            expect(requests.filter(path => path === '/schedules')).toHaveLength(2);
+            expect(requests.filter(path => path.startsWith('/weeks/'))).toHaveLength(stage === 'catalog' ? 1 : 2);
+        }
+    });
+}
+
+test('repeated sign-in clicks start only one authorization request', async ({page}) => {
+    await page.route('**/assets/admin-config.json', route => route.fulfill({json:{domain:'https://login.example',clientId:'spa',redirectUri:'http://127.0.0.1:8000/admin/'}}));
+    await page.addInitScript(() => {
+        const digest = crypto.subtle.digest.bind(crypto.subtle);
+        window.digestCalls = 0;
+        crypto.subtle.digest = async (...args) => {
+            window.digestCalls++;
+            await new Promise(resolve => { window.releaseDigest = resolve; });
+            return digest(...args);
+        };
+    });
+    let authorizations = 0;
+    await page.route('https://login.example/**', route => {
+        authorizations++;
+        return route.fulfill({body:'Managed login'});
+    });
+    await page.goto('/admin/');
+    await expect(page.locator('#status')).toContainText('Sign in with');
+    await page.locator('#login').evaluate(button => { button.click(); button.click(); });
+    await expect(page.locator('#login')).toBeVisible();
+    await expect(page.locator('#login')).toBeDisabled();
+    await expect(page.locator('#login')).toHaveText('Signing in ...');
+    await expect(page.locator('#status')).toHaveText('Opening sign-in…');
+    expect(await page.evaluate(() => window.digestCalls)).toBe(1);
+    await page.evaluate(() => window.releaseDigest());
+    await page.waitForURL('https://login.example/**');
+    expect(authorizations).toBe(1);
+});
+
+test('failed sign-in initiation restores the sign-in button', async ({page}) => {
+    await page.route('**/assets/admin-config.json', route => route.fulfill({json:{domain:'https://login.example'}}));
+    await page.addInitScript(() => {
+        crypto.subtle.digest = async () => { throw new Error('Unable to start sign-in'); };
+    });
+    await page.goto('/admin/');
+    await expect(page.locator('#status')).toContainText('Sign in with');
+    await page.locator('#login').click();
+    await expect(page.locator('#status')).toHaveText('Unable to start sign-in');
+    await expect(page.locator('#login')).toBeVisible();
+    await expect(page.locator('#login')).toBeEnabled();
+    await expect(page.locator('#login')).toHaveText('Sign in');
 });
