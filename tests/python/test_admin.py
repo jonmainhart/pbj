@@ -81,13 +81,17 @@ def setup_api(monkeypatch):
     return client
 
 
+@pytest.mark.smoke
 def test_authorization_fails_closed(monkeypatch):
-    setup_api(monkeypatch)
+    monkeypatch.setenv("PBJ_ADMIN_CLIENT_ID", "spa")
+    client = MagicMock(side_effect=AssertionError("Unauthorized request accessed S3"))
+    monkeypatch.setattr(storage, "client", client)
     assert admin.lambda_handler({}, None)["statusCode"] == 403
     for claim, value in [("token_use", "id"), ("scope", "openid"), ("client_id", "other")]:
         request = event()
         request["requestContext"]["authorizer"]["jwt"]["claims"][claim] = value
         assert admin.lambda_handler(request, None)["statusCode"] == 403
+    client.assert_not_called()
 
 
 def test_draft_save_uses_conditional_private_csv(monkeypatch):
@@ -110,13 +114,28 @@ def test_concurrent_save_is_conflict(monkeypatch):
     assert result["statusCode"] == 409
 
 
+@pytest.mark.smoke
 def test_submission_blocks_invalid_and_empty(monkeypatch):
-    client = setup_api(monkeypatch)
+    client, schedule, _ = published_week(monkeypatch, players=[])
+    assert (schedule["season"], schedule["week"]) == (2026, 1)
     for text in ["", "NAME,TIEBREAKER\nAlice,nan\n"]:
         result = admin.lambda_handler(
             event("/weeks/2026/1/submit", "POST", csv=text, confirm=True), None
         )
         assert result["statusCode"] == 422
+        body = json.loads(result["body"])
+        assert body["message"] == "Confirm submission and correct all errors"
+        if text:
+            assert body["rows"] == [["Alice", "nan"]]
+            assert {
+                "row": 0,
+                "column": 1,
+                "severity": "error",
+                "message": "Tiebreaker must be a finite nonnegative number",
+            } in body["issues"]
+        else:
+            assert body["rows"] == []
+            assert body["issues"] == []
     client.put_object.assert_not_called()
 
 

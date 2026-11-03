@@ -3,12 +3,15 @@
 import re
 from pathlib import Path
 
+import pytest
+
 from aws.deploy_site import upload_site
 from scripts.build_site import build_site
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@pytest.mark.smoke
 def test_upload_only_public_static_files(tmp_path):
     artifact = tmp_path / "site"
     build_site(ROOT, artifact)

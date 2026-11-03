@@ -106,6 +106,7 @@ def import_week():
     return invoke("import_picks", season=2026, week=6)
 
 
+@pytest.mark.smoke
 def test_import_real_pipeline_and_duplicate(setup, tmp_path):
     from scripts import aggregate_season, import_picks, score_week
 

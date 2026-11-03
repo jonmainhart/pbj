@@ -25,23 +25,41 @@ def build_site(source_root: Path, output_dir: Path) -> None:
     output_dir = output_dir.resolve()
     if source_root.is_relative_to(output_dir):
         raise ValueError("Site output cannot contain the source directory")
+    site_root = source_root / "site"
+    for path in [
+        *(site_root / name for name in SITE_FILES),
+        *(source_root / name for name in PUBLIC_FILES),
+    ]:
+        if path.resolve() != path:
+            raise ValueError(f"Public source cannot use symlinks: {path}")
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True)
-    site_root = source_root / "site"
     for name in SITE_FILES:
         shutil.copy2(site_root / name, output_dir / name)
     for name in PUBLIC_FILES:
         shutil.copy2(source_root / name, output_dir / name)
-    shutil.copytree(
-        site_root / "assets",
-        output_dir / "assets",
-        ignore=shutil.ignore_patterns("documents", ".DS_Store"),
-    )
-    if (site_root / "admin").exists():
-        shutil.copytree(site_root / "admin", output_dir / "admin")
+    # Publish only the current frontend inputs; documents are generated below.
+    for path in site_root.rglob("*"):
+        relative = path.relative_to(site_root)
+        if not path.is_file() or path.resolve() != path:
+            continue
+        if not (
+            relative == Path("admin/index.html")
+            or (relative.parent == Path("assets") and path.suffix in {".js", ".css"})
+            or (
+                relative.parent == Path("assets/img")
+                and path.suffix in {".png", ".jpg", ".jpeg", ".svg", ".ico", ".webp"}
+            )
+        ):
+            continue
+        target = output_dir / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target)
     data_root = source_root / "data"
     for path in data_root.rglob("*.json"):
+        if not path.is_file() or path.resolve() != path:
+            continue
         relative = path.relative_to(data_root)
         if relative == Path("available-weeks.json") or (
             len(relative.parts) == 2

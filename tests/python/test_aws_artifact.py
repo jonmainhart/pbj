@@ -6,7 +6,10 @@ import sys
 from pathlib import Path
 from textwrap import dedent
 
+import pytest
 
+
+@pytest.mark.smoke
 def test_staged_artifact_imports_its_own_modules(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[2]
     shutil.copy(root / "aws/lambda_function.py", tmp_path)

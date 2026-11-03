@@ -17,12 +17,13 @@ async function authenticated(page, {user = 'commissioner', etag = null, rows = [
     await page.goto('/admin/?code=code&state=state');
     await expect(page.locator('#editor')).toBeVisible();
 }
-test('public shell requires sign-in', async ({page}) => {
+test('public shell requires sign-in', {tag:'@smoke'}, async ({page}) => {
+    await page.route('**/assets/admin-config.json', route => route.fulfill({json:{}}));
     await page.goto('/admin/');
     await expect(page.locator('#editor')).toBeHidden();
     await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeVisible();
 });
-test('current default, editing, draft save and schedule switching', async ({page}) => {
+test('current default, editing, draft save and schedule switching', {tag:'@smoke'}, async ({page}) => {
     await authenticated(page);
     await expect(page.locator('#save')).toBeDisabled();
     await expect(page.locator('#week')).toHaveValue('2');
@@ -41,7 +42,7 @@ test('current default, editing, draft save and schedule switching', async ({page
     await expect(page.locator('#status')).toContainText('No schedule');
     await expect(page.locator('#week')).toHaveValue('1');
 });
-test('CSV upload is editable and submit requires confirmation', async ({page}) => {
+test('CSV upload is editable and submit requires confirmation', {tag:'@smoke'}, async ({page}) => {
     await authenticated(page);
     await page.locator('#file').setInputFiles({name:'picks.csv',mimeType:'text/csv',buffer:Buffer.from('NAME,NE SEA,TIEBREAKER\nAlice,SEA,30\n')});
     await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Alice');
@@ -309,7 +310,7 @@ test('debounced partial drafts keep newer edits during an in-flight save and nev
     expect(await page.evaluate(() => Object.values(localStorage).some(value => value.includes('access_token') || value.includes('refresh_token')))).toBe(false);
 });
 
-test('offline edits survive reload and reauthentication but restoration never autosaves', async ({page}) => {
+test('offline edits survive reload and reauthentication but restoration never autosaves', {tag:'@smoke'}, async ({page}) => {
     await page.clock.install();
     await authenticated(page);
     let writes = 0;
@@ -734,7 +735,7 @@ for (const published of [false,true]) {
         expect(await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('pbj.draft.') && !k.endsWith('.selection')))).toEqual([]);
     });
 }
-test('reopen uses the saved draft and preserves work when that draft disappears', async ({page}) => {
+test('reopen uses the saved draft and preserves work when that draft disappears', {tag:'@smoke'}, async ({page}) => {
     await page.clock.install();
     await authenticated(page,{etag:'original',rows:[['Original','SEA','30']]});
     await page.getByLabel('Player 1 NAME',{exact:true}).fill('Local');
@@ -941,7 +942,7 @@ test('create next week confirms, blocks duplicates, refreshes and opens its sche
 
 
 for (const selected of [undefined, {season:2026,week:1}, {season:2026,week:3}, {season:2026,week:18}]) {
-    test(`lazy catalog opens only the public default or valid remembered week (${selected?.week ?? 'default'})`, async ({page}) => {
+    test(`lazy catalog opens only the public default or valid remembered week (${selected?.week ?? 'default'})`, {tag:selected === undefined ? '@smoke' : []}, async ({page}) => {
         const requests = [];
         page.on('request', request => {
             if (request.url().startsWith('https://admin.example/')) requests.push(new URL(request.url()).pathname);

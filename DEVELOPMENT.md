@@ -433,7 +433,9 @@ Manual smoke checks remain:
     pytest -m smoke -q
     npx playwright test --grep @smoke
 
-The selections remain 15 Python and 6 browser tests. Full frontend validation is
+The selections include 21 Python and 12 browser tests, covering offline AWS processing,
+publication boundaries, portal authorization, lazy schedule loading, CSV submission,
+and private draft saving and recovery alongside the dashboard checks. Full frontend validation is
 `npm run lint && npm test`; full Python checks are listed above. Playwright and
 full pytest are never automatic local pre-commit checks. ESLint uses recommended
 correctness rules and browser/Node globals without enforcing formatting. Ruff's
