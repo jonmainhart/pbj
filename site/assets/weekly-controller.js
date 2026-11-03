@@ -4,7 +4,6 @@ import {
     openPlayerCard,
     closeActivePlayerCard,
     getActiveCardScroll,
-    isPlayerCardOpen,
 } from "./player-card.js";
 
 let state = { view: "players", active: null, returnTo: null };
@@ -23,10 +22,6 @@ export function initializeWeeklyInteractions() {
         state = openEntity(state, target);
         showActiveCard();
     });
-}
-
-export function isWeeklyCardOpen() {
-    return isPlayerCardOpen();
 }
 
 export function resetWeeklyNavigation(view = state.view) {

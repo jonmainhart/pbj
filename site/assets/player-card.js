@@ -10,10 +10,6 @@ export function initializePlayerCardInteractions(close = onClose) {
     onClose = close;
 }
 
-export function isPlayerCardOpen() {
-    return activePlayerCard !== null;
-}
-
 export function openPlayerCard(sourceCard, options = {}) {
     closeActivePlayerCard();
     const close = options.onClose ?? onClose;

@@ -1,515 +1,88 @@
-# PBJ Dashboard Development Notes
+# PBJ development
 
-PBJ Dashboard is a static dashboard for a weekly football pool.
+## Setup
 
-The commissioner's spreadsheet remains the source for player picks. PBJ Dashboard consumes CSV exports, obtains NFL data from a Game Data Provider, derives weekly and season results, and publishes the generated data through a static frontend.
+Use Python 3.11 or later and a supported Node version from [package.json](package.json); CI uses Python 3.14 and Node 22. From the repository root:
 
-Player-facing pool rules are documented in [RULES.md](RULES.md). This document describes how PBJ implements those rules and how the application is developed and operated.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install '.[dev,aws]'
+npm ci
+npx playwright install chromium
+```
 
-## Design Principles
+PBJ uses a `src/` layout and a non-editable Python install. Reinstall `.[dev,aws]` after changing Python package source or dependencies; otherwise tests can import an older installed copy. Local tests use fixtures and mocked AWS services and do not require AWS credentials. Fetching real game data or running deployment commands does require the relevant credentials and network access.
 
-- Preserve the commissioner's spreadsheet workflow.
-- Keep hosting and infrastructure simple.
-- Prioritize mobile usability.
-- Keep authoritative and derived data separate.
-- Isolate external services behind provider interfaces.
-- Make derived data reproducible.
-- Prefer simple designs that are easy to change.
+## Build and preview
 
-## Architecture
+```bash
+npm run build:admin
+python -m scripts.build_site
+python -m http.server 8000 --bind 127.0.0.1 --directory build/site
+```
 
-The primary data flow is:
+Open `http://127.0.0.1:8000/`. Rebuild after changing website source, public data, or source documents. The admin CSS build is needed after changes to portal styling. The static admin shell has no local Cognito/API configuration by default; browser tests mock it.
 
-    Spreadsheet → CSV → player data
-    Game Data Provider → game data
-    Games + players → weekly results → season results
+`scripts.build_site` replaces `build/site` with an allowlisted artifact: static site assets, public weekly/season JSON, and generated documents. It excludes CSVs, raw responses, source code, and runtime-managed announcements. `RULES.md`, `LICENSE`, `LICENSE-SCOPE.md`, and `LEGAL.md` are authoritative; edit those files when appropriate, not generated HTML. To regenerate documents without rebuilding the whole site:
 
-GitHub Actions performs routine production processing. The browser reads generated JSON and handles presentation only.
+```bash
+python -m scripts.generate_documents
+```
 
-## Data
+## Tests and quality checks
 
-Weekly data is stored in `data/<season>/weekNN.json` and contains:
+```bash
+ruff check .
+ruff format --check .
+mypy src scripts aws tests/python
+pytest
+npm run build:admin
+npm run lint
+npm run test:unit
+npm run test:browser
+```
 
-- `season`
-- `week`
-- `lock_time`
-- `games`
-- `players`
-- `results`
+`pytest` includes Python unit and integration-style tests with mocked services. To focus on the offline AWS artifact and publication boundaries:
 
-Season statistics are stored in `data/<season>/season.json`.
+```bash
+pytest -q tests/python/test_aws_artifact.py tests/python/test_aws_preview.py tests/python/test_aws_processing.py tests/python/test_build_site.py
+```
 
-### Games
+Run the tagged smoke suites with:
 
-Games use the provider-specific event ID as their stable identifier and retain only the schedule, team, status, and score information PBJ Dashboard needs.
+```bash
+pytest -m smoke -q
+npx playwright test --grep @smoke
+```
 
-Normalized statuses are `scheduled`, `live`, and `final`.
+For optional coverage use `pytest --cov=pbj`. Playwright rebuilds the site and starts a local server on `127.0.0.1:8000`; keep that port free. It uses `.venv/bin/python` if present, or `python3`; `PBJ_PYTHON` selects another interpreter. Browser tests use Chromium and mocked responses, including narrow viewports. Check Mobile Safari and real devices separately when relevant.
 
-Game winners are derived from final scores rather than persisted separately. A score of zero is valid; status determines whether a score is meaningful.
+The [quality workflow](.github/workflows/quality.yml) selects checks by changed paths and validates tracked JSON; manual runs and unknown paths select full checks. It is a QA signal, not a branch-protection rule. The optional local Git hook is checkout-specific; CI remains authoritative for its configured checks.
 
-### Players
+## Responsibilities and data boundaries
 
-Players have a stable ID, display name, optional nickname, picks, and a tiebreaker prediction.
+- `src/pbj/`: domain models, providers, CSV import, scoring, season aggregation, polling decisions, and weekly-data parsing; no AWS dependencies.
+- `scripts/`: command-line and reusable file operations. `update_games` owns games and the initial lock time, `import_picks` owns players, `score_week` owns weekly results, and `aggregate_season` owns `season.json`. Preserve fields owned by other operations.
+- `aws/`: storage, orchestration, authorization, deployment, and infrastructure. Lambda reuses the same Python package and scripts. Conditional writes and repeated aggregation support concurrency and recovery.
+- `site/`: static dashboard and commissioner portal. The dashboard derives presentation from JSON; it lazily loads historical names and fetches current week data fresh. The portal maintains private drafts and uses the API for authorized changes.
+- `tests/`: Python tests and frontend unit/browser tests. Browser fixtures and mocked AWS tests must remain deterministic without live services.
 
-Picks are keyed by game ID and contain the selected team's abbreviation. An absent game represents N/P.
+Weekly documents live at `data/<season>/weekNN.json`; season results at `data/<season>/season.json`, and `data/available-weeks.json` lists published weeks. Preserve these public formats and URLs. Game IDs are stable provider identifiers. Lock time is established on schedule creation and is not silently moved on later updates. CSV import validates matchups, accepts known team aliases and explicit `N/P`, leaves existing data unchanged if validation fails, and removes its input only after a successful write. See [RULES.md](RULES.md) for pool rules.
 
-## CSV Import
+GitHub Pages production uses repository data from `main`; AWS preview serves separately maintained operational JSON. The static preview uploader does not publish or replace AWS operational data. See [AWS operations](aws/README.md) before changing publication, authentication, drafts, or recovery.
 
-The importer matches matchup columns against the normalized NFL schedule and normalizes known team-abbreviation aliases.
+## Local processing commands
 
-Import rules:
+Run against a disposable copy of `data/` when experimenting; these commands can modify local files. BALLDONTLIE access requires `BALLDONTLIE_API_KEY` for a real fetch; the ESPN provider is an alternative where available.
 
-- Picks must match one of the teams playing the game.
-- Blank picks are errors.
-- Explicit `N/P` is accepted, omitted from normalized picks, and produces a warning.
-- Spreadsheet scoring or `CORRECT` data is ignored.
+```bash
+python scripts/update_games.py <season> <week> --provider balldontlie
+python scripts/import_picks.py <season> <week>
+python scripts/score_week.py <season> <week>
+python scripts/aggregate_season.py <season>
+python scripts/should_poll.py <season> <week>
+python scripts/generate_manifest.py
+```
 
-A successful import atomically replaces player data. The week is then rescored and season statistics are rebuilt so corrections propagate immediately.
-
-A failed import leaves existing weekly data unchanged and preserves the CSV for correction.
-
-## Data Ownership
-
-Each transformation owns part of the generated data:
-
-- `update_games.py` — games and initial lock time
-- `import_picks.py` — players
-- `score_week.py` — weekly results
-- `aggregate_season.py` — `season.json`
-- `app.js` — presentation only
-
-Each transformation must preserve data owned by the others.
-
-Per-pick correctness is not persisted; it is derived from the player's pick and the authoritative game result.
-
-## Lock Time
-
-Picks lock one hour before the scheduled kickoff of the first game of the week.
-
-The lock time is established when the schedule is created and stored in weekly data. Later schedule changes do not silently move it.
-
-## Weekly Scoring
-
-See [RULES.md](RULES.md) for the player-facing scoring rules. The details below describe their implementation and generated-data behavior.
-
-Only final games affect player statistics.
-
-For a normal final game:
-
-- Correct pick → win
-- Incorrect pick → loss
-- N/P → loss and missed pick
-
-For an NFL tie:
-
-- A player who made a pick receives a tie.
-- N/P receives a loss and missed pick.
-
-Scheduled and live games do not affect statistics.
-
-`missed_picks` is a subset of losses, not an additional scoring outcome.
-
-### Win %
-
-Win % is:
-
-    (wins + (0.5 * ties)) / (wins + losses + ties)
-
-NFL ties contribute half a win for Win % purposes. N/P losses are included. Win % is null when a player has no wins, losses, or ties.
-
-The generated JSON retains the `accuracy` field name for compatibility.
-
-## Weekly Completion and Ranking
-
-A week is complete only when every game is final.
-
-Until then:
-
-- Final games contribute current statistics.
-- Scheduled and live games do not.
-- Weekly ranks and winners are unavailable.
-
-Monday games are determined using `America/New_York`. If multiple Monday games are played, their scores are combined into one Monday total. The total is unavailable until every Monday game is final.
-
-A player's tiebreaker distance is the absolute difference between their prediction and the final Monday total.
-
-Completed weeks are ranked by:
-
-1. Most wins.
-2. Smallest tiebreaker distance.
-
-Equal wins and distance share a rank. Competition ranking is used, such as `1, 2, 2, 4`.
-
-Every player ranked first is a weekly winner and receives one weekly win for season tracking.
-
-Every player sharing the lowest final weekly rank receives a last-place finish.
-
-## Season Aggregation
-
-Completed weeks contribute:
-
-- Weeks played
-- Wins
-- Losses
-- Ties
-- Missed picks
-- Win %
-- Weekly wins
-- Last-place finishes
-
-`season.json` is a deterministic derived cache. It is rebuilt from completed weekly results rather than incrementally patched.
-
-Season standings are presentation-ranked by:
-
-1. Total wins, descending.
-2. Win %, descending.
-
-Players with equal wins and Win % share a rank. Competition ranking is used, such as `1, 2, 2, 4`. No additional statistic breaks a season ranking tie.
-
-Corrections to an earlier week therefore require rescoring that week and rebuilding the season.
-
-## Game Data Provider
-
-Game data access is isolated behind the provider layer.
-
-The provider converts provider-specific responses into PBJ domain objects. Scoring, season aggregation, and presentation should not depend directly on provider response structures.
-
-Provider-specific responses terminate at the provider layer; scoring, season aggregation, and presentation remain provider-independent.
-
-### Providers
-
-BALLDONTLIE.io is the preferred game data provider as of Week 4 of the 2026 season. It requires an API key.
-
-ESPN.com is the rollback provider. It does not require an API key but is not guaranteed to remain available or consistent.
-
-## Automation
-
-Production processing uses:
-
-- `create-week.yml`
-- `import-picks.yml`
-- `poll-games.yml`
-
-The normal lifecycle is:
-
-1. Create the weekly schedule.
-2. Import the commissioner's CSV.
-3. Update game data around NFL game times.
-4. Score changed weekly data.
-5. Rebuild season statistics.
-
-Meaningful generated-data changes are committed by the workflows.
-
-The 2026 season is currently explicit in the workflows.
-
-### Polling
-
-`poll-games.yml` is triggered every five minutes by an external scheduler using GitHub's `workflow_dispatch` event. PBJ Dashboard then determines whether game data actually needs to be refreshed.
-
-Polling is required when:
-
-- A scheduled game is between 15 minutes before and six hours after kickoff.
-- Any game is live.
-
-Final games do not independently require polling.
-
-The active week is the earliest weekly file containing an unfinished game. This prevents a future weekly file from blocking updates to an earlier unfinished week.
-
-Manual workflow dispatch can still be used when needed.
-
-## Frontend
-
-The frontend consists of `site/index.html`, `site/assets/style.css`, and native JavaScript modules under `site/assets/`, with no frontend framework or JavaScript build step. Python generates document HTML when preparing the static site.
-
-Phone usability is the primary design requirement.
-
-Player cards show compact weekly information and expand to show detailed picks. Presentation state is derived in JavaScript:
-
-Scheduled pick → ⏳
-Live pick, selected team ahead or tied → 🟢
-Live pick, selected team behind → 🟡
-Final correct pick → ✅
-Final incorrect pick → ❌
-NFL tie → ➖
-Scheduled/live N/P → ⏳ N/P
-Final N/P → ❌ N/P
-
-If scores are unavailable for a live game, the pick retains the generic 🟢 live state.
-
-Scheduled games show localized kickoff times. Live and final games show scores.
-
-During an incomplete week, the frontend derives mathematical elimination from current wins, remaining games, and player picks. A player remains in contention if any possible combination of remaining game winners allows that player to finish tied for the most wins.
-
-The tiebreaker is intentionally excluded from elimination. A player who can still tie for the most wins remains in contention.
-
-Players still in contention are displayed first, followed by an `ELIMINATED` divider and the remaining players. Within each group, players are sorted by current wins.
-
-Elimination is presentation-only state. It is not persisted and does not participate in scoring or tiebreaker calculations. Once the week is complete, `weekly_rank` is authoritative.
-
-Completed weekly winners are marked with `🏆`; players sharing the lowest final rank are marked with `💩`.
-
-The season view uses `👑` for the current first-place player, `🏆` for weekly win counts, and `💩` for nonzero last-place-finish counts.
-
-Python scoring remains authoritative. JavaScript presents the underlying state.
-
-### Responsive Card Layout
-
-Weekly player and season standings lists remain single-column at every viewport width. The previous 600px two-column resting-card layout is intentionally removed, including for larger phones in landscape.
-
-At viewport widths of 800px and above, weekly resting cards use a wide, shallow two-row layout: the player name and prominent W-L-T record appear above a compact sequence of picks in game order, alongside Win %. The compact pick row uses the same status indicators and colors as the detailed pick list, includes N/P, and does not wrap into matchup-like rows. Tiebreaker values remain in the expanded details, and weekly ranks and winner treatments remain unavailable until the week is complete. The eliminated-player divider remains the sole resting-list elimination label.
-
-Compact picks are presentation-only elements on resting cards. `weekly.js` creates them from existing game and pick data; `player-card.js` removes `.compact-picks` when cloning a card into the foreground overlay, preserving the expanded card's detailed pick list. No new data is persisted.
-
-At the same breakpoint, season standings use wide, shallow single-column cards while preserving the season record, Win %, weeks played, missed picks, and finish indicators. Below 800px, both lists retain their smaller-screen card presentation.
-
-### Weekly Games View and Navigation
-
-Players is the default weekly presentation. Games is derived from the same weekly JSON without adding persisted pick data. Games are sorted by kickoff, with unfinished games before final games; equal kickoff times retain input order.
-
-`game-view-model.js` owns game ordering and team/N/P grouping. `pick-status.js` contains the shared pick-status rules extracted from the Players view, and `game-display.js` formats matchups and localized kickoff times for both views.
-
-`weekly-navigation.js` defines pure state transitions with at most one return context. `weekly-controller.js` connects those transitions to view selection, stable entity IDs, focus, and page/card scroll snapshots. `player-card.js` handles player and game clones and delegated drill-down events; `foreground-card.js` owns the shared overlay, keyboard containment, and scroll locking for all foreground cards.
-
-A first cross-navigation saves the origin. Closing the destination restores that origin once. A second cross-navigation discards the old return context and makes the new destination a root. Explicit toggles, week changes, and dashboard-tab changes clear navigation context. Changing weeks starts in Players.
-
-Summary activation, Escape, and backdrop activation share the same close behavior. Cards use named dialogs and keep keyboard focus within the overlay. Refresh is suspended while any foreground card is open and retains the selected weekly presentation when new data is rendered.
-
-The season view is presentation-sorted by total wins, then Win %. Equal wins and Win % share a competition rank.
-
-### Document Cards and Publishing
-
-The footer Rules, Apache 2.0, Data & artwork terms, and Legal Notice controls open scrollable document cards without changing dashboard navigation. `document-card.js` owns loading, errors, and document-specific dismissal; `documents.js` fetches generated HTML. All document cards use the shared foreground-card behavior, including Close, backdrop dismissal, and Escape. Closing restores trigger focus and page scroll while retaining the current dashboard view and selected week. Late responses are ignored after dismissal.
-
-`scripts/generate_documents.py` generates dashboard presentation from the complete repository source documents:
-
-- `RULES.md` → `build/site/assets/documents/rules.html`, rendered using CommonMark.
-- `LICENSE` → `build/site/assets/documents/license.html`, rendered as escaped plain-text paragraphs.
-- `LICENSE-SCOPE.md` → `build/site/assets/documents/license-scope.html`, rendered using CommonMark.
-- `LEGAL.md` → `build/site/assets/documents/legal.html`, rendered using CommonMark.
-
-Raw HTML is disabled for Markdown sources. Plain-text rendering preserves wording and paragraph boundaries, joining source lines within each paragraph so the browser wraps text naturally at the available width. Keep `LICENSE` as extensionless plain text. Edit the source documents rather than maintaining presentation copies; generated `build/site/assets/documents/` files are ignored by Git.
-
-The sticky card header uses a document's opening `<h1>` when present, otherwise its configured title. The header keeps Close usable while long documents scroll.
-
-Build and serve the public artifact locally. Rebuild after editing website source, public JSON, or canonical documents:
-
-    python -m scripts.build_site
-    python -m http.server 8000 --bind 127.0.0.1 --directory build/site
-
-The builder replaces `build/site` with public root files, assets, dashboard JSON, and freshly generated documents. The original `LICENSE`, `LICENSE-SCOPE.md`, and `LEGAL.md` files remain directly available in the published artifact. CSV imports, raw provider responses, Python source, and development files are excluded. The normal deployment rebuilds document presentation after source edits.
-
-`deploy-pages.yml` builds and publishes this artifact after relevant changes on `main`, manual dispatch, or successful production data-processing workflows. The latter handles bot commits, which do not trigger another push workflow. Processing runs without a new commit skip publication. Pending runs queue so no-op processing runs cannot replace pending production deployments; running deployments are not canceled. Configure the repository's **Settings → Pages → Source** as **GitHub Actions** before using this deployment workflow. Manual deployment also builds `main`.
-
-## Announcements
-
-Commissioners manage both announcements in the portal's Announcements view. Edit and
-preview messages and optional HTTP(S) links, then select Publish Changes. Empty
-messages are hidden. Conflicts preserve local edits; Reload published content asks
-before discarding them. Announcements have no device draft persistence.
-
-The authenticated GET/PUT `/announcements` API reads and conditionally writes one
-runtime-managed `data/announcements.json` object in the operational bucket. The
-public dashboard reads it through CloudFront with no-store caching and refreshes
-when a suspended page resumes. Static builds and uploads exclude this object.
-
-Empty messages remain hidden. Existing line breaks are preserved.
-
-## Development
-
-Install or reinstall the project and development dependencies with:
-
-    python -m pip install ".[dev]"
-
-The project uses a `src/` layout and a non-editable install. Reinstall after source changes when testing the installed package.
-
-Do not use `PYTHONPATH=src` as part of the normal workflow.
-
-### Manual Commands
-
-    python scripts/update_games.py <season> <week>
-    python scripts/import_picks.py <season> <week>
-    python scripts/score_week.py <season> <week>
-    python scripts/aggregate_season.py <season>
-    python scripts/should_poll.py <season> <week>
-
-For `should_poll.py`, exit code 0 means polling is required and exit code 1 means it is not. Other nonzero codes indicate errors.
-
-### Testing and Quality
-
-Before committing Python changes:
-
-    pytest
-    mypy src scripts tests/python
-    ruff check .
-    ruff format --check .
-
-Coverage can be checked with:
-
-    pytest --cov=pbj
-
-Production code should contain no `print()` calls. Use logging for operational messages and exceptions for failures.
-
-Development follows a relaxed TDD cadence: add meaningful tests, implement the behavior, run the checks, and refactor while keeping the suite green.
-
-### Frontend Testing
-
-Frontend tests use Node's built-in test runner for deterministic logic and Playwright for browser interactions. No bundler, transpiler, or frontend framework is required.
-
-    npm ci
-    npx playwright install chromium
-    npm run lint
-    node --test tests/frontend/unit/*.test.js
-    npx playwright test
-
-Unit tests live in `tests/frontend/unit`; browser tests and synthetic JSON fixtures live in `tests/frontend/browser`. Python tests live in `tests/python/`; `pytest` discovers them by default and `pytest -m smoke` selects smoke tests. Browser tests serve the generated `build/site/` artifact and intercept data requests, independently of production participant data. Playwright starts Python's static server on `127.0.0.1:8000` and requires that port to be free.
-
-Playwright's web server command runs `scripts.build_site` exactly once before starting the HTTP server. A failed build prevents server startup; a successful build replaces stale output and regenerates documents from root-level canonical sources. It uses `.venv/bin/python` when present, otherwise `python3`; set `PBJ_PYTHON` to select another interpreter with the document dependencies installed. Shared document behavior is tested with synthetic HTML, and browser tests also load the real generated Rules, license, and scope assets. License checks cover complete paragraph content, natural wrapping, phone and desktop scrolling, horizontal overflow, usable Close controls, and restoration of trigger focus and dashboard state. Python tests cover escaping, paragraph boundaries, and regeneration from source documents while preserving the original files in the published artifact.
-
-Responsive card browser tests in `tests/frontend/browser/card-layout.spec.js` cover single-column ordering across phone, intermediate, and desktop widths; the 799px/800px layout boundary; 16 compact picks without wrapping; status indicators; preservation of expanded details; and season-card content.
-
-Automated browser checks use desktop Chromium, including narrow-screen functional checks. Mobile Safari is tested manually. Focus, scrolling, overflow, and usable controls matter more than pixel-perfect snapshots.
-
-## License
-
-PBJ Dashboard source code and project documentation are licensed under the Apache License 2.0.
-
-Pool participant data under `data/` and PBJ artwork and branding under `site/assets/img/` are expressly excluded from the Apache license. Third-party sports data, team identifiers, trademarks, and other third-party material are not licensed by this project.
-
-See [LICENSE](LICENSE) and [LICENSE-SCOPE.md](LICENSE-SCOPE.md) for details.
-
-## Change-aware Quality Gates
-
-CI is authoritative. `.github/workflows/quality.yml` provides the always-present
-**Quality gates** job for every PR to `main`, push to `main`, and manual dispatch.
-Python changes run Ruff lint/format, mypy, and full pytest. JavaScript, HTML, CSS,
-and public document changes run ESLint, Node tests, and full Chromium Playwright.
-Python scripts also run browser checks because they generate browser inputs.
-Documentation changes validate document generation and the public build; public
-rules/legal/license documents also receive browser checks. Relevant QA config,
-all workflow changes, and unknown file types select full checks. Manual dispatch
-and initial pushes run everything. PR detection uses the merge base and both sides
-of renames; pushes compare the complete before/after range. Detection errors fail
-the job. Every run parses tracked JSON/webmanifest files and rejects nonstandard
-`NaN`, `Infinity`, and `-Infinity` constants with an error naming the file.
-Data-only JSON/CSV changes skip full pytest, browser tests, and builds. JSON parsing is syntax
-validation, not a domain schema or CSV import validation.
-
-### Optional local hook
-
-The native hook installed for this checkout is `.git/hooks/pre-commit`; it is
-executable, local, and untracked. No hook manager or repository template is used.
-For another clone, create an executable hook at that same path using the commands
-below and staged-path selection (`git diff --cached --name-only --no-renames -z`).
-Install Python development dependencies and run `npm ci` first. Ensure
-`git config --get core.hooksPath` is unset (otherwise Git uses that directory).
-The hook uses `.venv/bin/python` when available, otherwise its Python interpreter.
-ESLint 10 supports Node 20.19+, Node 22.13+, and Node 24+, matching
-`package.json`: `^20.19.0 || ^22.13.0 || >=24`. CI uses Node 22.
-
-- Python source/tests: verify the installed PBJ source matches the checkout, then
-  `ruff check .`, `ruff format --check .`, `mypy src scripts tests/python`, and `pytest -m smoke -q`.
-- JavaScript source/tests: `npm run lint` and `npm run test:unit`.
-- QA configuration/workflows: both groups; mixed changes use their union.
-- JSON: parse staged blobs, including partially staged JSON; skip deleted files.
-- Documentation/HTML/CSS only: no automatic source tests; use CI and manual checks.
-
-The hook refuses source checks when any tracked worktree file differs from the
-index, or any non-ignored untracked files are present. Stage or temporarily set
-aside those changes first. This also protects against unstaged dependency files,
-not just partially staged source. This conservative guard is intentional: Ruff
-checks the whole checkout, and tests can read documents, data, and other files
-outside the staged paths. Safely isolating staged content would require additional
-snapshot or dependency-selection machinery; the optional hook keeps that complexity
-out of the development workflow. It never stashes or alters the index. The local
-package comparison prevents a stale non-editable installation from passing tests
-against old source; a mismatch fails with a reinstall instruction. Run
-`python -m pip install ".[dev]"` after source or dependency changes;
-CI installs clean dependencies. Hooks are optional and may be bypassed with
-`git -c core.hooksPath=/dev/null commit` when necessary; CI continues to report QA
-results without enforcing merge restrictions.
-
-Manual smoke checks remain:
-
-    pytest -m smoke -q
-    npx playwright test --grep @smoke
-
-The selections include 21 Python and 12 browser tests, covering offline AWS processing,
-publication boundaries, portal authorization, lazy schedule loading, CSV submission,
-and private draft saving and recovery alongside the dashboard checks. Full frontend validation is
-`npm run lint && npm test`; full Python checks are listed above. Playwright and
-full pytest are never automatic local pre-commit checks. ESLint uses recommended
-correctness rules and browser/Node globals without enforcing formatting. Ruff's
-expanded SIM/PERF/RUF/S families pass; tests alone exclude S101 for assertions.
-Formatting is gated after one tuple-only formatting correction in a test.
-
-### Unprotected main and production automation
-
-PBJ's `main` branch is intentionally unprotected so create-week, import-picks,
-and poll-games can commit game data, scoring updates, and season results directly
-to `main`. This is an architectural decision, not an outstanding Issue #37 task.
-Do not enable required checks or PR rules, introduce automation bypass permissions
-or special identities, or convert routine data commits into PRs for this work.
-
-**Quality gates** runs on its configured events and reports failures as an
-automated QA signal; GitHub does not enforce it as a merge restriction. Reviewers
-and developers are responsible for responding to failures. No repository settings
-are changed by this work. `GITHUB_TOKEN` bot commits do not trigger push workflows;
-other data-only pushes receive lightweight JSON validation. Existing production
-workflows and Pages publication remain independent and unchanged; quality is not
-a deployment dependency. Routine score updates do not invoke full QA.
-
-## Commissioner session continuity and draft recovery
-
-The portal keeps access and refresh tokens in memory. The original OAuth code
-exchange still uses S256 PKCE and state verification. Before a request near access
-expiry, it renews through Cognito's `/oauth2/token` refresh-token grant, sharing one
-renewal across concurrent callers. A 401 rejection can renew and replay once;
-network failures and server errors never replay a submission. Reloading requires
-sign-in again. The existing public client and refresh validity need no Terraform
-changes. See [Cognito token endpoint](https://docs.aws.amazon.com/cognito/latest/developerguide/token-endpoint.html).
-
-The existing `/schedules` response now includes `user_id` from API Gateway's
-verified Cognito claims. The existing open-week response includes minimal `games`
-metadata (`id`, `away`, `home`) derived from the schedule's game objects. These
-additive fields establish recovery ownership and matchup presentation without
-changing published weekly JSON or the Numbers importer. Reversed headers and
-aliases remain accepted; the display always uses schedule away/home orientation.
-Invalid or duplicate headers remain explicitly editable. Structural row-width
-errors use the existing row controls, rather than a schedule repair shortcut.
-
-Edits are copied synchronously to localStorage and saved to the private shared
-S3 draft after three seconds of inactivity. Draft writes are serialized and
-conditional on the last confirmed ETag. Edits made during a write remain dirty
-and get their own subsequent save. Failures keep the device copy; a 409 blocks
-further writes until the server draft is reopened and reviewed. Reconnection
-retries a conditional draft save, never submission or publication. Unresolved
-CSV first-row interpretation is retained locally until the user chooses it.
-
-Recovery records contain table contents and the base ETag, scoped to the API,
-app client, verified Cognito subject, season and week. No OAuth tokens or
-credentials are stored with them. A selection pointer remembers which week to
-open after authentication. Recovery is never read into the editor before the
-API verifies the account. It is offered explicitly alongside the server draft;
-a different base ETag warns that a newer shared draft exists. Restoring a device
-copy pauses autosave and requires a reviewed, confirmed Save Draft before any
-server replacement. Discard device copy deliberately removes that record.
-Confirmed saves remove redundant copies. Sign-out clears in-memory credentials
-and uses normal Cognito logout; unsaved recovery stays scoped to the same account.
-
-Local browser storage is **not encrypted** and does not isolate data from someone
-with access to the same browser profile or from script running on this origin.
-Use a trusted browser profile. Browser storage may be disabled, full, or cleared;
-the portal warns when recovery is unavailable, and private server saves remain
-the durable shared record. Multiple tabs still use S3 ETags; conflicts are never
-merged automatically. A recovery copy for the same account/week on one device
-uses one storage key, so a second tab can replace that device copy while both
-open editors retain their own in-memory contents. Use separate weeks or browser
-profiles when keeping independent unsaved versions.
-
-Deploy the updated admin Lambda before the updated static portal, through the
-existing deployment workflow, including the draft DELETE route and draft-only S3
-deletion permission. See [commissioner draft behavior](aws/README.md#commissioner-portal-local-implementation-review-before-deployment).
-The static build copies PBJ artwork to
-`build/site/assets/img/`, and the existing preview uploader includes PNG assets.
-Tests verify the intended logo's bytes in the artifact, its inclusion in upload
-selection, and its actual browser decoding. No live upload is needed to test it.
+`should_poll.py` exits 0 when a poll is needed, 1 when it is not, and uses other nonzero codes for errors. Production's GitHub workflows create schedules, import CSVs, poll games, and commit generated data; Pages publishes the resulting artifact. Keep operational data and credentials out of the static source and build inputs.

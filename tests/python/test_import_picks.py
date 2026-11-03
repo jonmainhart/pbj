@@ -7,7 +7,8 @@ from typing import Any
 import pytest
 
 from pbj.domain.player import Player
-from scripts import import_picks
+from pbj.week_data import games_from_week_data
+from scripts import import_picks, score_week
 
 
 def _week_data(
@@ -75,6 +76,31 @@ def _week_data(
             "players": [],
         },
     }
+
+
+@pytest.mark.parametrize("script", ["import", "score"])
+@pytest.mark.parametrize("score", [True, "7", 7.5])
+def test_import_and_scoring_reject_non_integer_game_scores(
+    tmp_path: Path, script: str, score: Any
+) -> None:
+    week = _week_data()
+    week["games"][0]["away_score"] = score
+    path = tmp_path / "week02.json"
+    path.write_text(json.dumps(week), encoding="utf-8")
+    original = path.read_bytes()
+    with pytest.raises(ValueError, match="invalid game score"):
+        if script == "import":
+            import_picks.import_picks_file(path, tmp_path / "week02.csv", 2026, 2)
+        else:
+            score_week.score_week_file(path, 2026, 2)
+    assert path.read_bytes() == original
+
+
+def test_week_game_conversion_accepts_missing_scores_and_missing_games() -> None:
+    week = _week_data()
+    week["games"][0]["away_score"] = None
+    assert games_from_week_data(week)[0].away_score is None
+    assert games_from_week_data({}) == []
 
 
 def _players() -> list[Player]:
@@ -568,7 +594,7 @@ def test_wrong_week_preserves_csv(
 @pytest.mark.unit
 def test_non_pick_count() -> None:
     """Missing game picks are counted across imported players."""
-    games = import_picks._games_from_week_data(_week_data())
+    games = games_from_week_data(_week_data())
 
     players = [
         Player(

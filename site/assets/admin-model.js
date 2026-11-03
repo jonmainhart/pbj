@@ -31,9 +31,8 @@ export function toCSV({headers, rows, needsHeaderChoice}) {
 }
 export function restoreHeaders(table, headers) {
     if (table.needsHeaderChoice) throw new Error('Choose how to interpret the first row before repairing headers.');
-    const key = value => value.trim().toUpperCase().split(/\s+/).map(v => ({JAC:'JAX', WAS:'WSH'}[v] || v)).sort().join(' ');
-    const columns = table.headers.map(key);
-    const targets = headers.map(key);
+    const columns = table.headers.map(normalizedHeader);
+    const targets = headers.map(normalizedHeader);
     const diagnostics = [];
     for (const target of new Set(targets)) {
         const sources = columns.flatMap((column, c) => column === target ? [c] : []);

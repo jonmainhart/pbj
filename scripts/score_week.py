@@ -3,14 +3,13 @@
 import argparse
 import json
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from pbj.domain.game import Game, GameStatus, Team
 from pbj.domain.player import Player
 from pbj.scoring import PlayerResult, WeekResult
 from pbj.scoring import score_week as calculate_week
+from pbj.week_data import games_from_week_data, load_validated_week
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +33,13 @@ def score_week_file(
     week: int,
 ) -> None:
     """Calculate and persist derived results for one weekly file."""
-    week_data = _load_week(
+    week_data = load_validated_week(
         path=path,
         season=season,
         week=week,
     )
 
-    games = _games_from_week_data(week_data)
+    games = games_from_week_data(week_data)
     players = _players_from_week_data(week_data)
 
     if not games:
@@ -102,88 +101,6 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _load_week(
-    path: Path,
-    season: int,
-    week: int,
-) -> dict[str, Any]:
-    """Load and validate an existing weekly JSON document."""
-    if not path.exists():
-        raise FileNotFoundError(f"{path} does not exist")
-
-    try:
-        with path.open(
-            encoding="utf-8",
-        ) as file:
-            data = json.load(file)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{path} does not contain valid JSON") from exc
-
-    if not isinstance(data, dict):
-        raise ValueError(f"{path} must contain a JSON object")
-
-    existing_season = data.get("season")
-    existing_week = data.get("week")
-
-    if existing_season != season:
-        raise ValueError(f"{path} contains season {existing_season}, expected {season}")
-
-    if existing_week != week:
-        raise ValueError(f"{path} contains week {existing_week}, expected {week}")
-
-    return data
-
-
-def _games_from_week_data(
-    week_data: dict[str, Any],
-) -> list[Game]:
-    """Build normalized Game objects from weekly JSON."""
-    raw_games = week_data.get("games")
-
-    if raw_games is None:
-        return []
-
-    if not isinstance(raw_games, list):
-        raise ValueError("weekly JSON games field must be a list")
-
-    games: list[Game] = []
-
-    for raw_game in raw_games:
-        if not isinstance(raw_game, dict):
-            raise ValueError("weekly JSON contains invalid game data")
-
-        away = raw_game.get("away")
-        home = raw_game.get("home")
-
-        if not isinstance(away, dict):
-            raise ValueError("weekly JSON contains invalid away team data")
-
-        if not isinstance(home, dict):
-            raise ValueError("weekly JSON contains invalid home team data")
-
-        games.append(
-            Game(
-                id=str(raw_game["id"]),
-                scheduled_time=datetime.fromisoformat(str(raw_game["scheduled_time"])),
-                away=Team(
-                    id=str(away["id"]),
-                    abbreviation=str(away["abbreviation"]),
-                    name=str(away["name"]),
-                ),
-                home=Team(
-                    id=str(home["id"]),
-                    abbreviation=str(home["abbreviation"]),
-                    name=str(home["name"]),
-                ),
-                status=GameStatus(str(raw_game["status"])),
-                away_score=_optional_int(raw_game.get("away_score")),
-                home_score=_optional_int(raw_game.get("home_score")),
-            )
-        )
-
-    return games
-
-
 def _players_from_week_data(
     week_data: dict[str, Any],
 ) -> list[Player]:
@@ -232,25 +149,6 @@ def _players_from_week_data(
         )
 
     return players
-
-
-def _optional_int(
-    value: Any,
-) -> int | None:
-    """Parse an optional integer from weekly JSON."""
-    if value is None:
-        return None
-
-    if isinstance(
-        value,
-        bool,
-    ) or not isinstance(
-        value,
-        int,
-    ):
-        raise ValueError(f"invalid game score: {value!r}")
-
-    return int(value)
 
 
 def _optional_string(

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {parseCSV, toCSV, restoreHeaders, canSwitch, resolveCSVHeaders} from '../../../site/assets/admin-model.js';
+import {parseCSV, toCSV, restoreHeaders, canSwitch, resolveCSVHeaders, matchupFor, needsHeaderRepair} from '../../../site/assets/admin-model.js';
 test('CSV round trips escaped commas, quotes, newlines and empty cells', () => {
     const table = {headers: ['NAME', 'NE SEA', 'TIEBREAKER'], rows: [['A, "B"\nC', 'N/P', '']]};
     assert.deepEqual(parseCSV(toCSV(table)), table);
@@ -11,6 +11,18 @@ test('CSV retains malformed row widths and accepts spreadsheet preamble', () => 
 test('repairing schedule headers preserves alias picks and inserts missing cells', () => {
     assert.deepEqual(restoreHeaders({headers:['NAME','WAS JAC','TIEBREAKER'], rows:[['Alice','JAC','30']]},
         ['NAME','JAX WSH','NE SEA','TIEBREAKER']), {headers:['NAME','JAX WSH','NE SEA','TIEBREAKER'], rows:[['Alice','JAC','','30']]});
+});
+test('matchup display, repair detection, and repair agree on aliases and reversed teams', () => {
+    const game = {away:'JAX', home:'WSH'};
+    const expected = ['NAME','JAX WSH','TIEBREAKER'];
+    const table = {headers:['NAME','  was  jac ','TIEBREAKER'], rows:[['Alice','JAC','30']]};
+    assert.equal(matchupFor(table.headers[1], table.headers, [game]), game);
+    assert.equal(needsHeaderRepair(table, expected), false);
+    assert.deepEqual(restoreHeaders(table, expected).rows, table.rows);
+    table.headers.splice(2, 0, 'JAX WSH');
+    assert.equal(matchupFor(table.headers[1], table.headers, [game]), null);
+    assert.equal(needsHeaderRepair(table, expected), true);
+    assert.throws(() => restoreHeaders(table, expected), /ambiguous/i);
 });
 test('week switches warn only for unsaved changes and respect cancellation', () => {
     assert.equal(canSwitch(false, () => { throw Error('unexpected'); }), true);

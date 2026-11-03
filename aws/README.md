@@ -1,158 +1,39 @@
-# PBJ AWS
+# PBJ AWS operations
 
-AWS infrastructure and application deployment are managed through GitHub Actions on `test/aws-upgrade`. GitHub Pages remains production until cutover.
+GitHub Pages on `main` remains production. The `test/aws-upgrade` branch provides an independent AWS preview with a commissioner portal; production cutover remains subject to [parallel validation #71](https://github.com/jonmainhart/pbj/issues/71) and [cutover #72](https://github.com/jonmainhart/pbj/issues/72).
 
-## Terraform
+## Deployment and infrastructure
 
-Infrastructure is managed through `aws/terraform/` using Terraform 1.17.0.
+A push to `test/aws-upgrade` or a manual run of [AWS infrastructure and deployment](../.github/workflows/terraform.yml) runs quality checks, validates Terraform, plans and applies an allowlisted plan, and then calls [Deploy AWS application](../.github/workflows/deploy-aws.yml). Deployment packages the installed `pbj` package with the reusable scripts and both Lambda handlers, checks the staged imports, deploys `pbj-processor` and `pbj-admin`, verifies their code hashes, builds the site, and uploads static preview assets. Review changes and workflow results before relying on the deployment; the push itself triggers it.
 
-- **Deployment:** `.github/workflows/terraform.yml` validates, plans, and applies changes automatically.
-- **State:** `s3://pbj-data-jm26/terraform/pbj.tfstate`, with S3 native locking.
-- **Credentials:** `pbj-aws-infra` uses `pbj-github-terraform`; `pbj-aws-deploy` uses `pbj-github-deploy`.
-- **IAM policy templates:** `aws/iam/`.
+Terraform configuration is in [aws/terraform](terraform/). Its S3 backend uses `s3://pbj-data-jm26/terraform/pbj.tfstate` in `us-east-2`, encryption, and S3 lockfiles. GitHub Actions initializes the remote backend and applies the saved plan after [aws/check-plan.py](check-plan.py) approves it. The guard rejects unallowlisted and destructive changes except its narrowly defined recovery cases; review the actual plan and guard before changes. Terraform owns the managed resources; avoid manual infrastructure changes that cause drift.
 
-Local validation:
+GitHub environments `pbj-aws-infra` and `pbj-aws-deploy` hold the scoped IAM-user access-key secrets used by the respective workflows. AWS deployment uses these IAM users, not the earlier proposed AWS OIDC workflow. Permission templates are in [aws/iam](iam/); update their resource identifiers and provision permissions through an authorized operator when infrastructure changes require it. Commissioner provisioning is a separate operator permission. Keep keys and provider credentials out of Git and public artifacts.
+
+For offline local Terraform checks:
 
 ```bash
 bash aws/check-terraform.sh
 ```
 
-GitHub Actions handles `terraform apply`. Terraform-managed resources should not be modified manually in AWS.
-
-## Resources
-
-- **Region:** `us-east-2`
-- **Lambda:** `pbj-processor`
-- **Data:** `s3://pbj-data-jm26/data/`
-- **AWS dependencies:** `pyproject.toml` (`.[aws]`)
-
-## Local checks
-
-```bash
-python -m pytest tests/python/test_aws_lambda.py
-```
-
-## Lambda testing
-
-Invoke weekly scoring without modifying S3:
-
-```bash
-aws lambda invoke \
-  --profile pbj \
-  --region us-east-2 \
-  --function-name pbj-processor \
-  --cli-binary-format raw-in-base64-out \
-  --payload '{"action":"score_week","season":2026,"week":7}' \
-  /tmp/pbj-result.json
-
-cat /tmp/pbj-result.json
-```
-
-`write` defaults to `false`. Set `"write": true` to persist changed results using conditional S3 writes. An empty event (`{}`) runs the import smoke test.
-
-Check the invocation response for `FunctionError`; a successful CLI exit does not guarantee successful Lambda execution.
-
-## Manual commissioner CSV import
-
-Original commissioner CSVs are uploaded to `incoming/<season>/weekNN.csv`.
-The Lambda `import_picks` action processes the specified season and week.
-The original CSV remains in S3 for retries and corrections. Automatic CSV
-processing is not yet enabled.
-
-## Public AWS preview
-
-The assigned HTTPS CloudFront hostname is publicly accessible, without viewer
-login. Both S3 origins remain private: `pbj-preview-jm26` holds static files;
-`/data/*` routes to Lambda-maintained `pbj-data-jm26/data/*`. OAC signs both
-origins. Bucket grants allow only `GetObject` from this distribution, and the
-operational grant covers only `data/*`, never `incoming/*` or `terraform/*`.
-The new bucket blocks all public access and has no website endpoint.
-
-After reviewed infrastructure deployment, retrieve the URL:
+The script checks formatting and validates with locally installed providers; if providers are absent it initializes with `-backend=false` and a read-only lockfile, without connecting to remote state. The normal workflow handles remote initialization and apply. To query outputs as an authorized operator, use an initialized remote-state working directory and the appropriate AWS credentials:
 
 ```bash
 terraform -chdir=aws/terraform output -raw preview_hostname
+terraform -chdir=aws/terraform output -raw admin_user_pool_id
 ```
 
-The existing branch workflow retains quality gates and Lambda deployment, then
-runs the shared `python -m scripts.build_site` and `python -m aws.deploy_site`.
-The uploader selects static files from `build/site`, including generated document
-cards and canonical legal files, omitting `CNAME`, `data/`, CSVs and credentials.
-It only puts objects in the static bucket; it never syncs or deletes. Removed
-static files are retained until explicitly cleaned up. Pages keeps its current
-build and data publishing behavior.
+## Runtime and publication boundaries
 
-Both CloudFront behaviors use managed CachingDisabled. Static uploads send
-`Cache-Control: no-cache`; unversioned files revalidate in browsers. JSON responses
-override browser cache headers with `no-store`, and all data fetches (including
-available-weeks) use `no-store`. Missing-object error caching is zero (S3 imposes
-a one-second minimum). No invalidation is required for Lambda or static updates.
-Home Screen resume behavior still requires device validation under #20.
+- The processor's private bucket is `pbj-data-jm26`. Public operational JSON lives under `data/`; commissioner drafts and submitted CSVs live under `incoming/`; Terraform state lives under `terraform/`.
+- `pbj-processor` uses the existing scripts to create schedules, poll, import, score, and aggregate. EventBridge Scheduler creates the week Tuesday at 8:00 AM Eastern and invokes polling every five minutes; the processor checks whether polling is needed. The configured season and first creation date are in [main.tf](terraform/main.tf). The BALLDONTLIE key is read from the configured SSM parameter; do not print its value into logs or documentation.
+- `pbj-admin` verifies API Gateway Cognito JWT claims and scope, reads schedules, manages private CSVs and announcements, and invokes the processor. Each Lambda has reserved concurrency of one. Do not run manual imports concurrently with portal submissions.
+- The public HTTPS CloudFront preview serves static assets from private `pbj-preview-jm26` and `/data/*` from the private operational bucket. The CloudFront URL itself is public; origin access controls do not restrict viewers. Only `data/*` is exposed from the operational bucket, never `incoming/*` or `terraform/*`.
+- Static uploads do not sync or delete objects and exclude `data/`, CSVs, `CNAME`, and Terraform-owned `assets/admin-config.json`. Removed static assets can remain in the bucket. JSON uses `no-store`; static assets revalidate. The portal configuration contains public API/OAuth settings, not a client secret.
 
-### Before the first deployment
+## Commissioner access and operation
 
-Review the IAM templates in `aws/iam/` and update the existing users, retaining
-current permissions and secrets. The deploy user gains only `s3:PutObject` on
-the new static bucket, with no operational data writes or CloudFront permissions.
-The infrastructure user needs the listed bucket inspection/configuration and
-CloudFront create/read/update actions. Replace `ACCOUNT_ID`; CloudFront resource
-IDs are unavailable until creation. For bootstrap only, use account-scoped
-`distribution/*`, `origin-access-control/*`, and `response-headers-policy/*` in
-those three read/update statements, then narrow to the output distribution ID
-and the OAC/header-policy IDs in state. Create operations require `Resource: *`.
-No additional identity, secret, domain or certificate is needed.
-
-AWS CLI confirmed that `pbj-data-jm26` has no existing bucket policy
-(`NoSuchBucketPolicy`). Terraform directly owns the new operational bucket policy:
-one `PBJPreviewDataRead` statement allows this distribution to read only `data/*`.
-The bucket itself, operational JSON, public-access block and encryption settings
-are unchanged. The expected initial plan adds seven managed preview resources.
-Existing processor, scheduler and state resources should be unchanged.
-The guard continues to reject deletion/replacement and non-allowlisted resources.
-Do not push this branch until review: pushes trigger the existing apply workflow.
-
-After deployment, check `/`, `/assets/app.js`, `/assets/documents/rules.html`,
-`/LEGAL.md`, `/data/available-weeks.json` and an AWS week/season JSON over HTTPS.
-Confirm `/incoming/<season>/weekNN.csv` and `/terraform/pbj.tfstate` are denied,
-as are direct anonymous S3 reads. Check JSON `Cache-Control: no-store`, HTTPS
-redirects, and a Lambda JSON update/weekly rollover without a frontend release.
-Compare AWS and Pages separately and verify on desktop and iOS. Local tests
-validate selection and configuration; only deployed checks prove actual access,
-routing, freshness and effective IAM permissions.
-
-For a small preview, estimate under $1/month incremental hosting while within
-CloudFront's account-wide pay-as-you-go free allowance (1 TB transfer and
-10 million requests/month). S3 still charges for uncached reads, storage and
-uploads: 100,000 GETs are about $0.04, plus a small static artifact and uploads.
-This is a traffic assumption, not a spending cap; existing Lambda costs are
-separate. New-account S3 credits/Free Tier eligibility depend on account age and
-plan; do not assume the older 12-month allowance applies. See current
-[CloudFront allowances](https://aws.amazon.com/cloudfront/faqs/) and
-[S3 pricing and credits](https://aws.amazon.com/s3/pricing/).
-
-## Commissioner portal (local implementation; review before deployment)
-
-`/admin/` is a vanilla JavaScript editor with locally compiled Tailwind v4 CSS:
-`npm ci && npm run build:admin`, then `python -m scripts.build_site`. The public
-dashboard retains its existing CSS and processing. The static shell contains no
-commissioner CSVs or credentials. Terraform writes public OAuth/API settings to
-`assets/admin-config.json` in the preview bucket; the static uploader does not
-manage that file. GitHub Pages remains production and has no admin configuration.
-
-The preview adds one Cognito Essentials pool (managed login v2), one public SPA
-client, one JWT-protected HTTP API, and `pbj-admin`. Accounts are provisioned
-individually; self-registration is disabled. Authorization-code + S256 PKCE uses
-a random, checked state and a ten-minute verifier window. Access tokens remain in
-memory, expire after 30 minutes, and are never saved to localStorage. Reloading
-requires sign-in again. Every API route requires `pbj/admin`; Lambda additionally
-checks the gateway-verified access-token type, subject, scope and client ID.
-The pool is dedicated to commissioners: every provisioned account has admin
-access. Disabling a user does not invalidate an already issued JWT immediately;
-allow its remaining 30-minute lifetime when revoking access.
-
-After reviewing and deploying Terraform, obtain `admin_user_pool_id` and
-`preview_hostname` outputs. A separately authorized operator with
-`cognito-idp:AdminCreateUser` for that pool provisions each commissioner:
+An authorized operator provisions each commissioner in the dedicated Cognito pool; self-registration is disabled. Obtain the pool ID and preview hostname from Terraform outputs, then use an operator identity with permission for that pool:
 
 ```bash
 aws cognito-idp admin-create-user --region us-east-2 \
@@ -161,99 +42,49 @@ aws cognito-idp admin-create-user --region us-east-2 \
   --desired-delivery-mediums EMAIL
 ```
 
-Cognito sends the temporary password; the user changes it at managed login.
-Only the preview `/admin/` HTTPS URL is an allowed callback/logout URL. No client
-secret, new IAM user, server, or database is required. Deploy both Lambdas using
-the reviewed branch workflow before opening the portal; their initial Terraform
-bootstrap intentionally cannot process requests.
+Cognito emails a temporary password. Only the preview `/admin/` URL is configured for login and logout. All provisioned accounts have commissioner access. Access and refresh tokens remain in memory; a page reload requires sign-in. Access tokens last 30 minutes, so disabling an account does not immediately invalidate an already issued token. The portal uses authorization code and PKCE; API routes require `pbj/admin` and the admin Lambda checks token identity, type, and client.
 
-Before deployment, update the existing IAM users from `aws/iam/` (replace
-`ACCOUNT_ID`, `ADMIN_POOL_ID`, `ADMIN_API_ID` and existing preview IDs). Infra
-permissions add the admin role/PassRole, Lambda and log group, scoped API Gateway
-management, Cognito configuration/branding, the CloudFront rewrite function, and
-one static config object. For initial creation only, pool/API IDs are unknown:
-use account/region-scoped `userpool/*` and `/apis/*`, then narrow them to outputs.
-The deploy user adds code-update/read permissions for **only** `pbj-admin`.
-Neither deployment user gains commissioner CSV access. Account provisioning is
-an operator permission and is intentionally absent from these workflow policies.
-The admin execution role reads schedules, conditionally writes private CSVs,
-and invokes only `pbj-processor`; it cannot publish JSON. Existing scheduler and
-processor settings are retained. The plan guard permits only named additions
-and still rejects deletion/replacement.
+The portal opens a private draft if present, otherwise published picks or an empty schedule. Edits are retained immediately on the device and autosaved to the shared private draft after inactivity, using ETags for conflict protection. Device recovery is scoped to the verified account and week, offered for explicit review, and is not encrypted; use a trusted browser profile. Browser storage can be unavailable or cleared. Multiple tabs can overwrite the same device recovery copy, although server ETags still detect conflicts.
 
-Private CSV paths in `pbj-data-jm26`:
+**Save Draft** remains private. **Submit Picks** validates and confirms the input, saves the draft, and invokes processing; published picks require explicit acknowledgement before editing and resubmission. **Reopen Saved Draft**, **Revert Changes**, and **Delete Draft** have distinct effects: deletion removes only the private draft, not submitted input or published results. Resolve conflicts by reopening and reviewing rather than overwriting another session. The Announcements view separately publishes two optional messages and links; announcement edits have no device draft recovery.
 
-- Draft: `incoming/<season>/drafts/weekNN.csv` (can contain validation errors).
-- Submitted importer input: `incoming/<season>/weekNN.csv`.
-- Published processor output: `data/<season>/weekNN.json`.
+**Create Week N** prepares only the next eligible week and does not publish its manifest entry. The scheduled Tuesday invocation reuses a prepared week and publishes it at the scheduled time. After an uncertain creation, refresh the catalog before trying again.
 
-The authenticated commissioner portal offers **Create Week N** when the latest
-season has sequential schedules, all are publicly available, and Week 18 has not
-been reached. Confirmation creates only the next weekly JSON through the existing
-processor; it leaves `data/available-weeks.json` and picks unchanged. Only one
-unpublished week can be prepared. Refresh the catalog after an uncertain result
-before attempting creation again.
+Private input paths are `incoming/<season>/drafts/weekNN.csv` for drafts and `incoming/<season>/weekNN.csv` for submitted input; published results are `data/<season>/weekNN.json` and `data/<season>/season.json`. Manual CSV import uses the submitted input path and the processor's `import_picks` action; uploading a CSV alone does not trigger processing.
 
-The Tuesday 8:00 AM Eastern invocation reuses an already prepared week without
-overwriting it and publishes the manifest through its scheduled target week.
-Other manual processor creation retains its existing manifest-publication default.
+## Troubleshooting and recovery
 
-Opening a week prefers the private draft, then published picks, then an empty
-schedule-derived table. Published weeks open read-only even when a draft exists.
-Editing requires acknowledgement; the warning remains visible, and resubmission
-requires a separate confirmation enforced by both the portal and API.
+Inspect the GitHub Actions run first for deployment or Terraform failures. With an authorized AWS profile, inspect Lambda logs without exposing credentials:
 
-Private saves never publish picks. ETags prevent overwriting another session's
-changes. Delete Draft removes only the private draft and reloads published picks
-or the empty schedule; missing drafts and stale versions are errors. Submitted
-inputs and published JSON remain untouched.
+```bash
+aws logs tail /aws/lambda/pbj-admin --region us-east-2 --profile pbj --since 1h
+aws logs tail /aws/lambda/pbj-processor --region us-east-2 --profile pbj --since 1h
+```
 
-Revert Changes restores the table originally loaded for this session, including
-reconciling autosaved edits. Failed or uncertain writes preserve recoverable work.
-An unconfirmed initial save is checked against the server before reverting; a
-draft found there must be explicitly reopened rather than assumed safe to delete.
-Reopen Saved Draft loads the current shared draft. Confirming discard clears the
-obsolete device copy only after the fetch succeeds, without a second recovery
-decision. Drafts retain aliases and N/P values.
+For a read-only processor scoring check, invoke `score_week` without `write` (the default is false), and inspect both the CLI response for `FunctionError` and the result file:
 
-The catalog lists weekly object keys and reads the public manifest once; it does
-not fetch weekly JSON contents. The default is the latest publicly available week
-in the newest season. A valid device selection takes precedence, and a prepared
-unpublished week is selectable without becoming the default. Opening or switching
-weeks reads only that schedule and its private draft. Malformed weekly content is
-rejected when opened; inconsistent keys or manifests block discovery and creation.
-Both the creation API and processor independently recheck current metadata before
-creation. Explicit unavailable weeks return 404 without substitution.
-CSV requests are limited to 250 KB in the browser and 500 KB at the API envelope.
+```bash
+aws lambda invoke --profile pbj --region us-east-2 --function-name pbj-processor \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{"action":"score_week","season":2026,"week":1}' /tmp/pbj-result.json
+cat /tmp/pbj-result.json
+```
 
-Submission confirms intent, validates using Numbers importer rules plus duplicate
-IDs, malformed rows and finite/nonnegative tiebreakers, saves the draft, writes
-the validated CSV to the private importer path, then synchronously invokes
-`import_picks`. Only an actual processor success is shown as successful. Drafts
-are retained on failure. Submitted-object metadata records `pending`/`complete`;
-a different CSV cannot replace an unresolved input. Retrying the same CSV runs
-the existing idempotent importer and repairs partial week/season publication.
-Admin concurrency is one; stale drafts and conditional S3 writes prevent
-accidental overwrites. Do not run manual imports concurrently with portal edits.
+A portal gateway timeout does not prove submission failed: API Gateway can time out after 30 seconds while the admin Lambda can run for 90 seconds. Wait at least 90 seconds, inspect both Lambda logs and the published week/season data, reopen the preserved draft, and retry the **same CSV**. A retry repairs partial publication. Transient 429 responses can mean the single admin execution is occupied; wait and retry.
 
-HTTP API integrations time out at 30 seconds while the admin Lambda may continue
-for up to 90 seconds (processor limit: 60). A gateway timeout is **not** proof of
-failure. Wait 90 seconds, reopen the preserved draft, then retry the same CSV.
-Transient 429s can occur while the single admin execution is occupied. If a
-pending input must be replaced, an operator must first verify the processor has
-finished, review its logs and published week/season JSON, and resolve the pending
-object explicitly; the portal deliberately cannot bypass that protection. Legacy
-inputs without status metadata also require operator review before replacement.
+A different CSV cannot replace a submitted object marked `pending` or with missing legacy status. Before an operator resolves such a case, confirm processing has stopped, review the existing input and published outputs, and preserve a copy. Do not bypass the conditional-write guard or run another import while the first outcome is uncertain. Inspect status and ETag without printing the CSV:
 
-Local checks cover mocked AWS authorization/storage/processor contracts and browser
-OAuth/API simulations. Real managed login, invitation delivery, JWT rejection,
-effective IAM, private-path denial, CloudFront `/admin/` routing and a real
-submission remain post-deployment checks. No AWS resources were changed locally.
+```bash
+aws s3api head-object --profile pbj --region us-east-2 --bucket pbj-data-jm26 \
+  --key incoming/2026/week01.csv --query '{state:Metadata.state,etag:ETag}'
+```
 
-At a few commissioners and hundreds of monthly calls, expect incremental cost
-well below $1/month, depending on account allowances and logging. Cognito's direct
-sign-in allowance is currently 10,000 MAUs/account or organization; HTTP API
-requests are approximately $1/million at the first tier, plus Lambda duration,
-S3 requests/storage, CloudFront function invocations and logs. This is an estimate,
-not a cap; see [Cognito pricing](https://aws.amazon.com/cognito/pricing/) and
-[HTTP API pricing](https://aws.amazon.com/api-gateway/pricing/).
+On draft conflict, reopen the saved draft and review the device copy before saving. If device recovery is unavailable, keep the page open and save to the private server draft. An uncertain initial save must be reconciled with the server before reverting; do not assume it failed. If sign-in fails, retry sign-in. If portal loading fails after authentication, retry loading using the current session.
+
+For a bad application release, use a reviewed correction or rollback of application source through the normal branch deployment workflow, and verify both Lambda hashes and the static preview afterward. This uploader does not delete stale static objects. Do not roll back operational data or Terraform state blindly: inspect current objects, logs, and available backups or versions, then use conditional recovery appropriate to the incident. GitHub Pages remains the production fallback until an authorized cutover.
+
+## Operational verification and cost
+
+After deployment, check the preview dashboard, `/admin/`, generated document cards, manifest and week/season JSON over HTTPS. Verify real commissioner login, authorization rejection, submission and recovery, and that direct anonymous S3 access, `/incoming/`, and `/terraform/` are denied. Compare AWS and Pages results separately, including desktop and iOS resume behavior. Local mocked tests do not prove deployed IAM, Cognito, CloudFront, or scheduler behavior; complete the operational checks in #71 before cutover.
+
+Keep public-access blocks, scoped IAM, private CSVs, state protection, and the existing deployment boundaries intact. Monitor CloudWatch logs, S3 requests/storage and versions, CloudFront traffic, Lambda execution, and Cognito/API usage against the account's actual allowances and billing alerts; usage and pricing change, so estimates are not spending caps.
