@@ -148,6 +148,8 @@ async function open(next, requireDraft = false) {
 }
 
 function syncControls() {
+    $('create-next').hidden = !catalog?.next_creation;
+    if (catalog?.next_creation) $('create-next').textContent = `Create Week ${catalog.next_creation.week}`;
     $('published-warning').hidden = !published;
     $('edit-published').hidden = !locked;
     $('delete-draft').hidden = !drafts?.etag;
@@ -157,7 +159,7 @@ function syncControls() {
     $('header-choice').hidden = !ambiguous;
     $('headers').hidden = !needsHeaderRepair(table, expectedHeaders);
     document.querySelectorAll('#editor button, #editor select, #editor input').forEach(el => {
-        const administrative = ['edit-published', 'delete-draft', 'reopen', 'discard-device', 'season', 'week'].includes(el.id);
+        const administrative = ['create-next', 'edit-published', 'delete-draft', 'reopen', 'discard-device', 'season', 'week'].includes(el.id);
         const recoveryChoice = administrative || el.id === 'restore-device';
         const needsInterpretation = ambiguous && (el.closest('#picks') || ['headers', 'validate', 'save', 'submit'].includes(el.id));
         el.disabled = busy || (locked && !administrative) || (!$('recovery').hidden && !recoveryChoice) || needsInterpretation;
@@ -222,6 +224,25 @@ for (const id of ['season', 'week']) $(id).onchange = () => task(async () => {
     if (id === 'season') next.week = Math.max(...catalog.seasons[next.season]);
     if (!canSwitch(unsaved(), confirm)) { $('season').value = selection.season; $('week').value = selection.week; return; }
     try { await open(next); } catch (error) { $('season').value = selection.season; $('week').value = selection.week; throw error; }
+});
+$('create-next').onclick = () => task(async () => {
+    const target = catalog.next_creation;
+    if (!target || !canSwitch(unsaved(), confirm)) return;
+    if (!confirm(`Create season ${target.season}, Week ${target.week}? This creates the schedule only. It will not appear in the public dashboard until scheduled publication on Tuesday at 8:00 AM Eastern. Picks remain in the private draft workflow.`)) return;
+    status('Creating schedule…');
+    let result;
+    try {
+        result = await api('/schedules/next', 'POST', {token:target.token, confirm:true});
+    } catch (error) {
+        // Reconcile the catalog without retrying an uncertain creation or discarding edits.
+        catalog = await api('/schedules');
+        options('season', Object.keys(catalog.seasons), selection.season);
+        options('week', catalog.seasons[selection.season], selection.week);
+        throw error;
+    }
+    catalog = await api('/schedules');
+    await open({season:result.season, week:result.week});
+    status(result.message);
 });
 $('edit-published').onclick = () => {
     if (busy || !locked || !confirm('Edit previously published picks? Resubmitting may alter participant-facing results.')) return;

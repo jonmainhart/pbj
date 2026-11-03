@@ -633,3 +633,153 @@ def test_poll_updates_scores_and_preserves_original_fields(setup, picks, status)
         [6] if picks and status == "final" else []
     )
     assert invoke("poll_games")["written"] == []
+
+
+def prepare_next(s3):
+    invoke("create_week", season=2026, week=1)
+    config = storage.StorageConfig.from_environment()
+    return processing.next_creation(s3, config)
+
+
+def test_portal_creation_then_scheduled_publication_preserves_all_data(setup):
+    s3, provider = setup
+    target = prepare_next(s3)
+    before = dict(s3.objects)
+    result = invoke(
+        "create_week", season=2026, week=2, publish_manifest=False, creation_token=target["token"]
+    )
+    assert result["written"] == ["data/2026/week02.json"]
+    assert all(s3.objects[k] == value for k, value in before.items())
+    created = s3.objects["data/2026/week02.json"]
+    assert processing.next_creation(s3, storage.StorageConfig.from_environment()) is None
+    with pytest.raises(ValueError, match="state changed"):
+        invoke(
+            "create_week",
+            season=2026,
+            week=3,
+            publish_manifest=False,
+            creation_token=target["token"],
+        )
+    assert invoke("create_week", scheduled_time="2026-09-08T12:00:00Z")["written"] == []
+    result = invoke("create_week", scheduled_time="2026-09-15T12:00:00Z")
+    assert result["fetched"] is False
+    assert s3.objects["data/2026/week02.json"] == created
+    assert s3.data("data/available-weeks.json") == {"2026": [1, 2]}
+    assert provider.get_week.call_count == 2
+    with pytest.raises(ValueError, match="state changed"):
+        invoke(
+            "create_week",
+            season=2026,
+            week=3,
+            publish_manifest=False,
+            creation_token=target["token"],
+        )
+
+
+@pytest.mark.parametrize(
+    "public,created",
+    [
+        (None, [1]),
+        ({"2026": [1]}, [1, 3]),
+        ({"2026": [1, 2]}, [1]),
+        ({"2026": []}, [1]),
+        ({"2026": [True]}, [1]),
+        ({"2026": [2, 1]}, [1, 2]),
+        ({"2026": list(range(1, 19))}, list(range(1, 19))),
+        ({"2026": [1]}, [1, 19]),
+    ],
+)
+def test_portal_ineligible_state_fails_closed(setup, public, created):
+    s3, provider = setup
+    for week in created:
+        s3.seed(f"data/2026/week{week:02d}.json", weekly())
+    if public is not None:
+        s3.seed("data/available-weeks.json", public)
+    assert processing.next_creation(s3, storage.StorageConfig.from_environment()) is None
+    with pytest.raises(ValueError, match="state changed"):
+        invoke("create_week", season=2026, week=2, publish_manifest=False, creation_token="stale")  # noqa: S106 - catalog version
+    provider.get_week.assert_not_called()
+    assert s3.writes == []
+
+
+def test_portal_creation_race_never_overwrites_or_publishes(setup):
+    s3, provider = setup
+    target = prepare_next(s3)
+    before_manifest = s3.objects["data/available-weeks.json"]
+
+    def race(*args, **kwargs):
+        s3.seed("data/2026/week02.json", weekly())
+        return provider.get_week.return_value
+
+    provider.get_week.side_effect = race
+    with pytest.raises(ClientError):
+        invoke(
+            "create_week",
+            season=2026,
+            week=2,
+            publish_manifest=False,
+            creation_token=target["token"],
+        )
+    assert s3.data("data/2026/week02.json") == weekly()
+    assert s3.objects["data/available-weeks.json"] == before_manifest
+
+
+def test_portal_provider_failure_preserves_state(setup):
+    s3, provider = setup
+    target = prepare_next(s3)
+    before = dict(s3.objects)
+    provider.get_week.side_effect = RuntimeError("Provider unavailable")
+    with pytest.raises(RuntimeError, match="Provider unavailable"):
+        invoke(
+            "create_week",
+            season=2026,
+            week=2,
+            publish_manifest=False,
+            creation_token=target["token"],
+        )
+    assert s3.objects == before
+
+
+@pytest.mark.parametrize("invalid", [{}, {"games": []}, {"games": [{}]}, []])
+def test_portal_eligibility_does_not_read_schedule_contents(setup, invalid):
+    s3, provider = setup
+    s3.seed("data/2026/week01.json", invalid)
+    s3.seed("data/available-weeks.json", {"2026": [1]})
+    target = processing.next_creation(s3, storage.StorageConfig.from_environment())
+    assert target is not None and target["week"] == 2
+    provider.get_week.assert_not_called()
+
+
+@pytest.mark.parametrize("option", [None, 0, "false", False])
+def test_unpublished_creation_requires_valid_option_and_catalog(setup, option):
+    s3, provider = setup
+    with pytest.raises(ValueError):
+        invoke("create_week", season=2026, week=1, publish_manifest=option)
+    assert s3.writes == []
+    provider.get_week.assert_not_called()
+
+
+def test_portal_processor_rechecks_metadata_without_reading_weeks(setup, monkeypatch):
+    from unittest.mock import MagicMock
+
+    s3, _ = setup
+    target = prepare_next(s3)
+    s3.get_object = MagicMock(wraps=s3.get_object)
+    s3.get_paginator = MagicMock(wraps=s3.get_paginator)
+    invoke(
+        "create_week", season=2026, week=2, publish_manifest=False, creation_token=target["token"]
+    )
+    s3.get_object.assert_called_once_with(Bucket="pbj-data-jm26", Key="data/available-weeks.json")
+    s3.get_paginator.assert_called_once_with("list_objects_v2")
+    # Publication happened before a stale processor request reached creation.
+    invoke("create_week", season=2026, week=2)
+    s3.get_object.reset_mock()
+    with pytest.raises(ValueError, match="state changed"):
+        invoke(
+            "create_week",
+            season=2026,
+            week=2,
+            publish_manifest=False,
+            creation_token=target["token"],
+        )
+    assert "data/2026/week03.json" not in s3.objects

@@ -139,7 +139,7 @@ resource "aws_apigatewayv2_integration" "admin" {
   timeout_milliseconds   = 30000
 }
 resource "aws_apigatewayv2_route" "admin" {
-  for_each             = toset(["GET /schedules", "GET /weeks/{season}/{week}", "POST /weeks/{season}/{week}/validate", "PUT /weeks/{season}/{week}/draft", "DELETE /weeks/{season}/{week}/draft", "POST /weeks/{season}/{week}/submit"])
+  for_each             = toset(["GET /schedules", "POST /schedules/next", "GET /weeks/{season}/{week}", "POST /weeks/{season}/{week}/validate", "PUT /weeks/{season}/{week}/draft", "DELETE /weeks/{season}/{week}/draft", "POST /weeks/{season}/{week}/submit"])
   api_id               = aws_apigatewayv2_api.admin.id
   route_key            = each.value
   target               = "integrations/${aws_apigatewayv2_integration.admin.id}"

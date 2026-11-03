@@ -47,6 +47,7 @@ ALLOWED.update(
     f'aws_apigatewayv2_route.admin["{route}"]'
     for route in (
         "GET /schedules",
+        "POST /schedules/next",
         "GET /weeks/{season}/{week}",
         "POST /weeks/{season}/{week}/validate",
         "PUT /weeks/{season}/{week}/draft",

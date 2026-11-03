@@ -12,9 +12,8 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
-from aws import storage
+from aws import processing, storage
 from aws.admin_csv import inspect_csv, published_csv
-from pbj.active_week import select_active_week
 from pbj.week_data import load_games
 
 if TYPE_CHECKING:
@@ -78,38 +77,78 @@ def read_private_csv(
         return None
 
 
+def create_next(
+    event: dict[str, Any], s3: "S3Client", config: storage.StorageConfig
+) -> dict[str, Any]:
+    body_text = event.get("body") or "{}"
+    if event.get("isBase64Encoded"):
+        body_text = base64.b64decode(body_text).decode()
+    body = json.loads(body_text)
+    target = processing.next_creation(s3, config)
+    if target is None or body.get("token") != target["token"]:
+        return response(409, {"message": "Schedule state changed; refresh the schedule catalog"})
+    if body.get("confirm") is not True:
+        return response(422, {"message": "Confirm schedule creation"})
+    try:
+        invoked = boto3.client(
+            "lambda", config=Config(read_timeout=70, retries={"total_max_attempts": 1})
+        ).invoke(
+            FunctionName=os.environ["PBJ_PROCESSOR_FUNCTION"],
+            InvocationType="RequestResponse",
+            Payload=json.dumps(
+                dict(
+                    action="create_week",
+                    season=target["season"],
+                    week=target["week"],
+                    publish_manifest=False,
+                    creation_token=target["token"],
+                )
+            ).encode(),
+        )
+        with invoked["Payload"] as stream:
+            result = json.loads(stream.read())
+        if (
+            not invoked.get("FunctionError")
+            and result.get("status") == "ok"
+            and result.get("season") == target["season"]
+            and result.get("week") == target["week"]
+        ):
+            return response(
+                200,
+                {
+                    "season": target["season"],
+                    "week": target["week"],
+                    "message": "Schedule ready. Public availability follows scheduled publication.",
+                },
+            )
+    except Exception:
+        # Never retry an invocation whose result is uncertain.
+        result = None
+    schedule = storage.read(
+        s3, config, config.key(f"{target['season']}/week{target['week']:02d}.json")
+    )
+    return response(
+        409 if schedule else 502,
+        {
+            "message": "Schedule now exists; refresh to open it."
+            if schedule
+            else "Creation was not confirmed. Refresh the catalog before trying again.",
+        },
+    )
+
+
 def dispatch(event: dict[str, Any]) -> dict[str, Any]:
     config = storage.StorageConfig.from_environment()
     s3 = storage.client()
     method = event["requestContext"]["http"]["method"]
     path = event["rawPath"]
+    if method == "POST" and path == "/schedules/next":
+        return create_next(event, s3, config)
     if method == "GET" and path == "/schedules":
-        weeks: dict[int, dict[int, Any]] = {}
-        with TemporaryDirectory() as directory:
-            for key in storage.list_keys(s3, config):
-                match = re.fullmatch(r"data/(\d{4})/week(0[1-9]|1[0-8])\.json", key)
-                if not match:
-                    continue
-                snapshot = storage.read(s3, config, key, required=True)
-                if snapshot is None:
-                    continue
-                local = Path(directory) / "week.json"
-                local.write_bytes(snapshot.content)
-                games = load_games(local)
-                if games:
-                    weeks.setdefault(int(match[1]), {})[int(match[2])] = games
-        if not weeks:
-            return response(404, {"message": "No schedules available"})
-        season = max(weeks)
-        week = select_active_week(weeks[season]) or max(weeks[season])
+        catalog = processing.discover_schedules(s3, config)
         return response(
             200,
-            dict(
-                seasons={str(s): sorted(w) for s, w in weeks.items()},
-                season=season,
-                week=week,
-                user_id=event["requestContext"]["authorizer"]["jwt"]["claims"]["sub"],
-            ),
+            {**catalog, "user_id": event["requestContext"]["authorizer"]["jwt"]["claims"]["sub"]},
         )
     match = re.fullmatch(r"/weeks/(\d{4})/(0?[1-9]|1[0-8])(?:/(validate|draft|submit))?", path)
     if not match:

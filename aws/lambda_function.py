@@ -82,4 +82,12 @@ def lambda_handler(event: Any, context: Any) -> dict[str, Any]:
             week = event.get("week")
             if type(week) is not int or not 1 <= week <= 18:
                 raise ValueError("Manual creation requires a week from 1 to 18")
+    if action == "create_week" and "publish_manifest" in event:
+        publish = event["publish_manifest"]
+        token = event.get("creation_token")
+        if type(publish) is not bool:
+            raise ValueError("publish_manifest must be a boolean")
+        if not publish and (scheduled is not None or not isinstance(token, str) or not token):
+            raise ValueError("Unpublished creation requires a catalog token and explicit week")
+        return processing.process(action, season, week, scheduled, publish, token)
     return processing.process(action, season, week, scheduled)

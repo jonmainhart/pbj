@@ -1,17 +1,18 @@
 import {test, expect} from '@playwright/test';
 
-async function authenticated(page, {user = 'commissioner', etag = null, rows = [], published = false} = {}) {
+async function authenticated(page, {user = 'commissioner', etag = null, rows = [], published = false, selected, unpublished = false} = {}) {
     await page.route('**/assets/admin-config.json', route => route.fulfill({json:{api:'https://admin.example',domain:'https://login.example',clientId:'spa',redirectUri:'http://127.0.0.1:8000/admin/'}}));
     await page.route('https://login.example/oauth2/token', route => route.fulfill({json:{access_token:'test-access',refresh_token:'test-refresh',expires_in:1800}}));
     await page.route('https://admin.example/**', route => {
         expect(route.request().headers().authorization).toBe('Bearer test-access');
         const path = new URL(route.request().url()).pathname;
         if (path === '/schedules') return route.fulfill({json:{seasons:{2026:[1,2,3]},season:2026,week:2,user_id:user}});
-        if (path.endsWith('/3')) return route.fulfill({status:404,json:{message:'No schedule available for the selected week'}});
+        if (path.endsWith('/3') && !unpublished) return route.fulfill({status:404,json:{message:'No schedule available for the selected week'}});
         if (path.endsWith('/draft')) return route.fulfill({json:{etag:'saved',issues:[]}});
         if (path.endsWith('/submit')) return route.fulfill({json:{etag:'submitted',issues:[],message:'Picks submitted and processed',result:{status:'ok'}}});
         return route.fulfill({json:{games:[{id:'game',away:path.includes('/1')?'JAX':'NE',home:path.includes('/1')?'WSH':'SEA'}],headers:['NAME',path.includes('/1')?'JAX WSH':'NE SEA','TIEBREAKER'], rows, etag, published, source:etag ? 'draft' : published ? 'published' : 'empty', issues:[]}});
     });
+    if (selected) await page.addInitScript(value => localStorage.setItem('pbj.draft.' + JSON.stringify(['https://admin.example','spa','commissioner']) + '.selection', JSON.stringify(value)), selected);
     await page.addInitScript(() => sessionStorage.setItem('pbj.pkce', JSON.stringify({verifier:'verifier',state:'state',created:Date.now()})));
     await page.goto('/admin/?code=code&state=state');
     await expect(page.locator('#editor')).toBeVisible();
@@ -895,3 +896,110 @@ for (const status of [409,502]) {
         await name.fill('Still recoverable'); await page.clock.runFor(6000); expect(methods).toEqual(['DELETE']);
     });
 }
+
+test('create next week confirms, blocks duplicates, refreshes and opens its schedule', async ({page}) => {
+    await authenticated(page, {published:true});
+    let created = false, requests = 0, release;
+    await page.route('https://admin.example/schedules', route => route.fulfill({json:{
+        seasons:{2026:created ? [1,2,3] : [1,2]}, season:2026, week:2, user_id:'commissioner',
+        next_creation:created ? null : {season:2026,week:3,token:'catalog-version'},
+    }}));
+    await page.route('https://admin.example/schedules/next', async route => {
+        requests++;
+        expect(route.request().postDataJSON()).toEqual({token:'catalog-version',confirm:true});
+        await new Promise(resolve => { release = resolve; });
+        created = true;
+        await route.fulfill({json:{season:2026,week:3,message:'Schedule ready'}});
+    });
+    await page.route('https://admin.example/weeks/2026/3', route => route.fulfill({json:{
+        headers:['NAME','BUF NYJ','TIEBREAKER'], games:[{id:'new',away:'BUF',home:'NYJ'}],
+        rows:[], etag:null, published:false, issues:[],
+    }}));
+    await page.goto('/admin/?code=code&state=state');
+    const create = page.getByRole('button', {name:'Create Week 3',exact:true});
+    await expect(create).toBeEnabled();
+    page.once('dialog', dialog => dialog.dismiss());
+    await create.click();
+    expect(requests).toBe(0);
+    page.once('dialog', dialog => {
+        expect(dialog.message()).toContain('Tuesday at 8:00 AM Eastern');
+        return dialog.accept();
+    });
+    await create.click();
+    await expect(create).toBeDisabled();
+    await expect.poll(() => requests).toBe(1);
+    release();
+    await expect(page.locator('#week')).toHaveValue('3');
+    await expect(page.getByLabel('Column 2 header')).toHaveValue('BUF NYJ');
+    await expect(page.locator('#picks thead')).toContainText('BUF\nNYJ');
+    await expect(create).toBeHidden();
+    await page.getByLabel('Player 1 NAME',{exact:true}).fill('Alice');
+    await expect(page.locator('#save')).toBeEnabled();
+    await page.locator('#save').click();
+    await expect(page.locator('#status')).toHaveText('Draft saved privately');
+});
+
+
+for (const selected of [undefined, {season:2026,week:1}, {season:2026,week:3}, {season:2026,week:18}]) {
+    test(`lazy catalog opens only the public default or valid remembered week (${selected?.week ?? 'default'})`, async ({page}) => {
+        const requests = [];
+        page.on('request', request => {
+            if (request.url().startsWith('https://admin.example/')) requests.push(new URL(request.url()).pathname);
+        });
+        await authenticated(page, {selected,unpublished:true});
+        const expected = selected?.week === 1 || selected?.week === 3 ? selected.week : 2;
+        await expect(page.locator('#week')).toHaveValue(String(expected));
+        await expect(page.locator('#week option[value="3"]')).toHaveCount(1);
+        expect(requests).toEqual(['/schedules', `/weeks/2026/${expected}`]);
+        const next = expected === 1 ? 2 : 1;
+        await page.locator('#week').selectOption(String(next));
+        await expect(page.locator('#status')).toHaveText(`Season 2026 · Week ${next}`);
+        expect(requests).toEqual(['/schedules', `/weeks/2026/${expected}`, `/weeks/2026/${next}`]);
+    });
+}
+
+test('uncertain creation refreshes metadata and preserves the selected editor without retrying', async ({page}) => {
+    await authenticated(page);
+    let failed = false, creations = 0;
+    await page.route('https://admin.example/schedules', route => route.fulfill({json:{
+        seasons:{2026:failed ? [1,2,3] : [1,2]},season:2026,week:2,user_id:'commissioner',
+        next_creation:failed ? null : {season:2026,week:3,token:'version'},
+    }}));
+    await page.route('https://admin.example/schedules/next', route => {
+        creations++; failed = true;
+        return route.fulfill({status:409,json:{message:'Schedule now exists; refresh to open it.'}});
+    });
+    await page.route('https://admin.example/weeks/2026/3', route => route.fulfill({json:{
+        headers:['NAME','BUF NYJ','TIEBREAKER'], games:[{id:'new',away:'BUF',home:'NYJ'}],
+        rows:[], etag:null, published:false, issues:[],
+    }}));
+    await page.goto('/admin/?code=code&state=state');
+    await page.clock.install();
+    await page.getByLabel('Player 1 NAME',{exact:true}).fill('Preserve my edits');
+    const recovery = () => page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('pbj.draft.') && !key.endsWith('.selection')));
+    const retained = await recovery();
+    expect(retained).toHaveLength(1);
+    const requests = [];
+    page.on('request', request => {
+        if (request.url().startsWith('https://admin.example/')) requests.push([request.method(), new URL(request.url()).pathname]);
+    });
+    page.on('dialog', dialog => dialog.accept());
+    await page.locator('#create-next').click();
+    await expect(page.locator('#status')).toHaveText('Schedule now exists; refresh to open it.');
+    await expect(page.locator('#season')).toHaveValue('2026');
+    await expect(page.locator('#week')).toHaveValue('2');
+    await expect(page.locator('#week option')).toHaveText(['1','2','3']);
+    await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Preserve my edits');
+    await expect(page.locator('#create-next')).toBeHidden();
+    expect(creations).toBe(1);
+    expect(requests).toEqual([['POST','/schedules/next'],['GET','/schedules']]);
+    await expect(page.locator('#dirty')).toHaveText('Unsaved changes');
+    expect(await recovery()).toEqual(retained);
+    await page.locator('#week').selectOption('3');
+    await expect(page.locator('#status')).toHaveText('Season 2026 · Week 3');
+    await expect(page.locator('#week')).toHaveValue('3');
+    await expect(page.getByLabel('Column 2 header')).toHaveValue('BUF NYJ');
+    await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('');
+    expect(requests).toEqual([['POST','/schedules/next'],['GET','/schedules'],['GET','/weeks/2026/3']]);
+    expect(creations).toBe(1);
+});

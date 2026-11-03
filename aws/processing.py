@@ -1,11 +1,13 @@
 """Coordinate existing PBJ file operations using a local S3 snapshot."""
 
+import hashlib
 import json
 import os
 import re
 from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from aws import storage
@@ -14,6 +16,9 @@ from pbj.polling import should_poll
 from pbj.providers.balldontlie import BALLDONTLIEProvider
 from pbj.week_data import load_games
 from scripts import aggregate_season, generate_manifest, import_picks, score_week, update_games
+
+if TYPE_CHECKING:
+    from mypy_boto3_s3 import S3Client
 
 WEEK_FILE = re.compile(r"(\d{4})/week(0[1-9]|1[0-8])\.json$")
 
@@ -114,8 +119,66 @@ def import_existing_week(season: int, week: int) -> dict[str, object]:
     return dict(status="ok", action="import_picks", season=season, week=week, written=written)
 
 
+def discover_schedules(s3: "S3Client", config: storage.StorageConfig) -> dict[str, Any]:
+    """Build the portal catalog from one key listing and one manifest read."""
+    weeks: dict[int, list[int]] = {}
+    for key in sorted(storage.list_keys(s3, config)):
+        name = key.removeprefix(config.prefix)
+        match = WEEK_FILE.fullmatch(name)
+        if match:
+            season, week = int(match[1]), int(match[2])
+            if season < 1900 or name != f"{season}/week{week:02d}.json":
+                raise ValueError("Invalid schedule season")
+            weeks.setdefault(season, []).append(week)
+        elif PurePosixPath(name).name.lower().startswith("week"):
+            raise ValueError("Invalid weekly schedule object name")
+    manifest = storage.read(s3, config, config.key("available-weeks.json"))
+    if manifest is None:
+        raise ValueError("Public schedule manifest is missing")
+    public = json.loads(manifest.content)
+    if not weeks or not isinstance(public, dict) or set(public) != {str(s) for s in weeks}:
+        raise ValueError("Public schedule manifest does not match schedule seasons")
+    season = max(weeks)
+    for current, created in weeks.items():
+        published = public[str(current)]
+        if (
+            created != list(range(1, max(created) + 1))
+            or not isinstance(published, list)
+            or not published
+            or any(type(w) is not int for w in published)
+            or published != created[: len(published)]
+            or not 0 <= len(created) - len(published) <= (1 if current == season else 0)
+        ):
+            raise ValueError("Schedule weeks and public manifest are inconsistent")
+    latest = max(weeks[season])
+    target = None
+    if latest < 18 and public[str(season)] == weeks[season]:
+        token = hashlib.sha256(json.dumps([weeks, manifest.etag]).encode()).hexdigest()
+        target = dict(season=season, week=latest + 1, token=token)
+    return dict(
+        seasons={str(s): w for s, w in weeks.items()},
+        season=season,
+        week=max(public[str(season)]),
+        next_creation=target,
+    )
+
+
+def next_creation(s3: "S3Client", config: storage.StorageConfig) -> dict[str, object] | None:
+    """Recheck authoritative metadata; inconsistent state never permits creation."""
+    try:
+        target: dict[str, object] | None = discover_schedules(s3, config)["next_creation"]
+        return target
+    except ValueError:
+        return None
+
+
 def process(
-    action: str, season: int, week: int | None = None, scheduled: datetime | None = None
+    action: str,
+    season: int,
+    week: int | None = None,
+    scheduled: datetime | None = None,
+    publish_manifest: bool = True,
+    creation_token: str | None = None,
 ) -> dict[str, object]:
     if action == "create_week" and scheduled is not None:
         week = scheduled_week(scheduled)
@@ -132,8 +195,17 @@ def process(
             )
     config = storage.StorageConfig.from_environment()
     s3 = storage.client()
-    names = [key.removeprefix(config.prefix) for key in storage.list_keys(s3, config)]
-    names = [name for name in names if WEEK_FILE.fullmatch(name)]
+    if action == "create_week" and not publish_manifest:
+        try:
+            catalog = discover_schedules(s3, config)
+        except ValueError as exc:
+            raise ValueError("Schedule state changed; refresh the schedule catalog") from exc
+        if catalog["next_creation"] != dict(season=season, week=week, token=creation_token):
+            raise ValueError("Schedule state changed; refresh the schedule catalog")
+        names = [f"{s}/week{w:02d}.json" for s, weeks in catalog["seasons"].items() for w in weeks]
+    else:
+        names = [key.removeprefix(config.prefix) for key in storage.list_keys(s3, config)]
+        names = [name for name in names if WEEK_FILE.fullmatch(name)]
     written: list[str] = []
     fetched = scored = False
     with TemporaryDirectory() as directory:
@@ -159,7 +231,7 @@ def process(
             if week is None:
                 raise ValueError("Creation requires a target week")
             manifest_key = config.key("available-weeks.json")
-            manifest_original = storage.read(s3, config, manifest_key)
+            manifest_original = storage.read(s3, config, manifest_key) if publish_manifest else None
             existing = {int(path.stem[4:]) for path in season_dir.glob("week??.json")}
             if existing != set(range(1, max(existing, default=0) + 1)):
                 raise ValueError("Existing weekly files contain a gap")
@@ -173,9 +245,21 @@ def process(
                 storage.publish(s3, config, key, path.read_bytes(), None)
                 written.append(key)
                 fetched = True
-            manifest = json.dumps(generate_manifest.build_manifest(root), indent=2).encode() + b"\n"
-            if storage.publish(s3, config, manifest_key, manifest, manifest_original):
-                written.append(manifest_key)
+            if publish_manifest:
+                available = generate_manifest.build_manifest(root)
+                if scheduled is not None:
+                    # A delayed Tuesday delivery must not expose a prepared future week.
+                    published = (
+                        json.loads(manifest_original.content).get(str(season), [])
+                        if manifest_original
+                        else []
+                    )
+                    available[str(season)] = [
+                        w for w in available[str(season)] if w <= week or w in published
+                    ]
+                manifest = json.dumps(available, indent=2).encode() + b"\n"
+                if storage.publish(s3, config, manifest_key, manifest, manifest_original):
+                    written.append(manifest_key)
         else:
             weeks = {
                 int(path.stem[4:]): load_games(path) for path in season_dir.glob("week??.json")

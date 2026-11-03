@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import boto3
+import pytest
 from botocore.exceptions import ClientError
 
 from aws import admin, storage
@@ -169,17 +170,47 @@ def test_processor_failure_retains_pending_input_and_draft(monkeypatch):
     assert json.loads(result["body"])["etag"] == "new-version"
 
 
-def test_schedule_selection_reuses_active_week_and_latest_fallback(monkeypatch):
-    setup_api(monkeypatch)
-    monkeypatch.setattr(
-        storage, "list_keys", lambda *a: ["data/2026/week01.json", "data/2026/week02.json"]
+@pytest.mark.parametrize("count", [1, 8, 18])
+@pytest.mark.parametrize("prefix", ["data/", "archive/pbj/"])
+def test_schedule_catalog_uses_one_listing_and_only_the_manifest(monkeypatch, count, prefix):
+    s3, _, _ = creation_api(monkeypatch)
+    monkeypatch.setenv("PBJ_DATA_PREFIX", prefix)
+    s3.objects.clear()
+    public = {"2025": list(range(1, 19)), "2026": list(range(1, count + 1))}
+    for season, weeks in public.items():
+        for week in weeks:
+            # Discovery must not parse even malformed historical documents.
+            s3.objects[f"{prefix}{season}/week{week:02d}.json"] = b"malformed weekly JSON"
+    s3.seed(prefix + "available-weeks.json", public)
+    s3.get_paginator = MagicMock(wraps=s3.get_paginator)
+    s3.get_object = MagicMock(wraps=s3.get_object)
+    result = admin.lambda_handler(event("/schedules"), None)
+    assert result["statusCode"] == 200
+    catalog = json.loads(result["body"])
+    assert catalog["seasons"] == public
+    assert (catalog["season"], catalog["week"]) == (2026, count)
+    assert catalog["user_id"] == "commissioner"
+    assert (catalog["next_creation"] is None) == (count == 18)
+    if count < 18:
+        assert catalog["next_creation"]["week"] == count + 1
+    s3.get_paginator.assert_called_once_with("list_objects_v2")
+    s3.get_object.assert_called_once_with(
+        Bucket="pbj-data-jm26", Key=prefix + "available-weeks.json"
     )
-    # Fixture week is final: fallback selects latest, then unfinished week uses existing selector.
-    result = json.loads(admin.lambda_handler(event("/schedules"), None)["body"])
-    assert result["week"] == 2
-    monkeypatch.setattr(admin, "select_active_week", lambda weeks: 1)
-    result = json.loads(admin.lambda_handler(event("/schedules"), None)["body"])
-    assert result["week"] == 1
+
+
+@pytest.mark.parametrize("latest", [2, 18])
+def test_unpublished_week_is_selectable_but_not_the_default(monkeypatch, latest):
+    s3, _, _ = creation_api(monkeypatch)
+    for week in range(2, latest + 1):
+        s3.objects[f"data/2026/week{week:02d}.json"] = b"not read during discovery"
+    s3.seed("data/available-weeks.json", {"2026": list(range(1, latest))})
+    result = admin.lambda_handler(event("/schedules"), None)
+    assert result["statusCode"] == 200
+    catalog = json.loads(result["body"])
+    assert catalog["seasons"] == {"2026": list(range(1, latest + 1))}
+    assert catalog["week"] == latest - 1
+    assert catalog["next_creation"] is None
 
 
 def test_explicit_missing_schedule_is_not_substituted(monkeypatch):
@@ -335,8 +366,8 @@ def test_private_listing_permission_is_limited_to_csv_key_patterns():
 
 
 def test_verified_identity_and_schedule_orientation_are_exposed(monkeypatch):
-    setup_api(monkeypatch)
-    monkeypatch.setattr(storage, "list_keys", lambda *a: ["data/2026/week01.json"])
+    s3, _, _ = creation_api(monkeypatch)
+    s3.objects["data/2026/week01.json"] = Path("data/2026/week01.json").read_bytes()
     catalog = json.loads(admin.lambda_handler(event("/schedules"), None)["body"])
     assert catalog["user_id"] == "commissioner"
     body = json.loads(admin.lambda_handler(event(), None)["body"])
@@ -594,3 +625,205 @@ def test_delete_infrastructure_is_draft_scoped():
     )
     assert '"DELETE /weeks/{season}/{week}/draft"' in config
     assert '"DELETE"' in config
+
+
+def creation_api(monkeypatch):
+    from aws import processing
+
+    from .test_aws_lambda import weekly
+    from .test_aws_processing import S3
+
+    monkeypatch.setenv("PBJ_DATA_BUCKET", "pbj-data-jm26")
+    monkeypatch.setenv("PBJ_DATA_PREFIX", "data/")
+    monkeypatch.setenv("PBJ_ADMIN_CLIENT_ID", "spa")
+    monkeypatch.setenv("PBJ_PROCESSOR_FUNCTION", "pbj-processor")
+    s3 = S3()
+    s3.seed("data/2026/week01.json", weekly())
+    s3.seed("data/available-weeks.json", {"2026": [1]})
+    monkeypatch.setattr(storage, "client", lambda: s3)
+    target = processing.next_creation(storage.client(), storage.StorageConfig.from_environment())
+    processor = MagicMock()
+    monkeypatch.setattr(boto3, "client", lambda *a, **kw: processor)
+    return s3, target, processor
+
+
+def test_create_next_auth_confirmation_and_server_target(monkeypatch):
+    s3, target, processor = creation_api(monkeypatch)
+    request = event("/schedules/next", "POST", token=target["token"], confirm=True, week=18)
+    unauthorized = dict(request, requestContext={})
+    assert admin.lambda_handler(unauthorized, None)["statusCode"] == 403
+    assert admin.lambda_handler(event("/schedules/next", "POST"), None)["statusCode"] == 409
+    assert (
+        admin.lambda_handler(event("/schedules/next", "POST", token=target["token"]), None)[
+            "statusCode"
+        ]
+        == 422
+    )
+    processor.invoke.assert_not_called()
+    processor.invoke.return_value = {
+        "Payload": BytesIO(json.dumps(dict(status="ok", season=2026, week=2)).encode())
+    }
+    result = admin.lambda_handler(request, None)
+    assert result["statusCode"] == 200
+    invoked = json.loads(processor.invoke.call_args.kwargs["Payload"])
+    assert invoked == dict(
+        action="create_week",
+        season=2026,
+        week=2,
+        publish_manifest=False,
+        creation_token=target["token"],
+    )
+    assert s3.writes == []
+
+
+def test_create_next_failures_reconcile_without_retry(monkeypatch):
+    for failure in ("provider", "timeout", "malformed", "wrong_target", "race"):
+        s3, target, processor = creation_api(monkeypatch)
+        if failure == "timeout":
+            processor.invoke.side_effect = TimeoutError()
+        elif failure == "malformed":
+            processor.invoke.return_value = {"Payload": BytesIO(b"invalid")}
+        elif failure == "wrong_target":
+            processor.invoke.return_value = {
+                "Payload": BytesIO(b'{"status":"ok","season":2026,"week":3}')
+            }
+        else:
+            if failure == "race":
+                # Creation happens after eligibility is checked, during invocation.
+
+                def race(s3=s3, **kwargs):
+                    s3.objects["data/2026/week02.json"] = s3.objects["data/2026/week01.json"]
+                    raise TimeoutError()
+
+                processor.invoke.side_effect = race
+            else:
+                processor.invoke.return_value = {
+                    "FunctionError": "Unhandled",
+                    "Payload": BytesIO(b"{}"),
+                }
+        result = admin.lambda_handler(
+            event("/schedules/next", "POST", token=target["token"], confirm=True), None
+        )
+        assert result["statusCode"] == (409 if failure == "race" else 502)
+        assert processor.invoke.call_count == 1
+        assert s3.writes == []
+        if failure == "race":
+            processor.invoke.reset_mock()
+            result = admin.lambda_handler(
+                event("/schedules/next", "POST", token=target["token"], confirm=True), None
+            )
+            assert result["statusCode"] == 409
+            processor.invoke.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "public,extra",
+    [
+        (None, None),
+        ([], None),
+        ({}, None),
+        ({"2026": []}, None),
+        ({"2026": [True]}, None),
+        ({"2026": [1, 3]}, None),
+        ({"2026": [1, 2]}, None),
+        ({"2027": [1]}, None),
+        ({"2026": [1]}, "2026/week03.json"),
+        ({"2026": [1]}, "2026/week19.json"),
+        ({"2026": [1]}, "2026/week00.json"),
+        ({"2026": [1]}, "2026/week1.json"),
+        ({"2026": [1]}, "1899/week01.json"),
+        ({"2026": [1]}, "10000/week01.json"),
+        ({"2026": [1]}, "2026/week02.json.bak"),
+        ({"2026": [1]}, "unexpected/week01.json"),
+    ],
+)
+def test_invalid_catalog_fails_closed_without_reading_weeks(monkeypatch, public, extra):
+    from aws import processing
+
+    s3, target, processor = creation_api(monkeypatch)
+    if public is None:
+        del s3.objects["data/available-weeks.json"]
+    else:
+        s3.seed("data/available-weeks.json", public)
+    if extra:
+        s3.objects["data/" + extra] = b"must not read"
+    s3.get_object = MagicMock(wraps=s3.get_object)
+    result = admin.lambda_handler(event("/schedules"), None)
+    assert result["statusCode"] == 400
+    assert "seasons" not in json.loads(result["body"])
+    assert (
+        processing.next_creation(storage.client(), storage.StorageConfig.from_environment()) is None
+    )
+    result = admin.lambda_handler(
+        event("/schedules/next", "POST", token=target["token"], confirm=True), None
+    )
+    assert result["statusCode"] == 409
+    processor.invoke.assert_not_called()
+    assert all(c.kwargs["Key"] == "data/available-weeks.json" for c in s3.get_object.call_args_list)
+
+
+def test_malformed_manifest_fails_closed(monkeypatch):
+    s3, _, _ = creation_api(monkeypatch)
+    s3.objects["data/available-weeks.json"] = b"{invalid"
+    result = admin.lambda_handler(event("/schedules"), None)
+    assert result["statusCode"] == 400
+
+
+@pytest.mark.parametrize("saved", [False, True])
+def test_open_week_reads_only_requested_schedule_and_private_draft(monkeypatch, saved):
+    s3, _, _ = creation_api(monkeypatch)
+    s3.objects["data/2026/week02.json"] = s3.objects["data/2026/week01.json"]
+    s3.objects["data/2026/week03.json"] = b"broken historical schedule"
+    s3.get_object = MagicMock(wraps=s3.get_object)
+    s3.get_paginator = MagicMock(wraps=s3.get_paginator)
+    for week in (1, 2):
+        draft_key = f"incoming/2026/drafts/week{week:02d}.csv"
+        if saved:
+            s3.objects[draft_key] = b"NAME,NE SEA,TIEBREAKER\nCommissioner,SEA,30\n"
+        s3.get_object.reset_mock()
+        result = admin.lambda_handler(event(f"/weeks/2026/{week}"), None)
+        assert result["statusCode"] == 200
+        body = json.loads(result["body"])
+        assert body["source"] == ("draft" if saved else "published")
+        if saved:
+            assert body["etag"] == s3.etag(s3.objects[draft_key])
+            assert body["rows"][0][0] == "Commissioner"
+        assert [call.kwargs["Key"] for call in s3.get_object.call_args_list] == [
+            f"data/2026/week{week:02d}.json",
+            f"incoming/2026/drafts/week{week:02d}.csv",
+        ]
+    s3.get_paginator.assert_not_called()
+    s3.get_object.reset_mock()
+    result = admin.lambda_handler(event("/weeks/2026/3"), None)
+    assert result["statusCode"] == 400
+    assert [c.kwargs["Key"] for c in s3.get_object.call_args_list] == ["data/2026/week03.json"]
+
+
+@pytest.mark.parametrize("published", [False, True])
+def test_creation_api_rechecks_state_before_invocation(monkeypatch, published):
+    s3, target, processor = creation_api(monkeypatch)
+    s3.objects["data/2026/week02.json"] = b"not fetched for eligibility"
+    if published:
+        s3.seed("data/available-weeks.json", {"2026": [1, 2]})
+    s3.get_object = MagicMock(wraps=s3.get_object)
+    s3.get_paginator = MagicMock(wraps=s3.get_paginator)
+    result = admin.lambda_handler(
+        event("/schedules/next", "POST", token=target["token"], confirm=True), None
+    )
+    assert result["statusCode"] == 409
+    processor.invoke.assert_not_called()
+    s3.get_object.assert_called_once_with(Bucket="pbj-data-jm26", Key="data/available-weeks.json")
+    s3.get_paginator.assert_called_once_with("list_objects_v2")
+    assert "data/2026/week03.json" not in s3.objects
+
+
+def test_multiple_unpublished_weeks_fail_closed(monkeypatch):
+    s3, _, processor = creation_api(monkeypatch)
+    for week in (2, 3):
+        s3.objects[f"data/2026/week{week:02d}.json"] = b"not read"
+    assert admin.lambda_handler(event("/schedules"), None)["statusCode"] == 400
+    assert (
+        admin.lambda_handler(event("/schedules/next", "POST", confirm=True), None)["statusCode"]
+        == 409
+    )
+    processor.invoke.assert_not_called()

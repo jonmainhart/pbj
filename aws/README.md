@@ -187,6 +187,17 @@ Private CSV paths in `pbj-data-jm26`:
 - Submitted importer input: `incoming/<season>/weekNN.csv`.
 - Published processor output: `data/<season>/weekNN.json`.
 
+The authenticated commissioner portal offers **Create Week N** when the latest
+season has sequential schedules, all are publicly available, and Week 18 has not
+been reached. Confirmation creates only the next weekly JSON through the existing
+processor; it leaves `data/available-weeks.json` and picks unchanged. Only one
+unpublished week can be prepared. Refresh the catalog after an uncertain result
+before attempting creation again.
+
+The Tuesday 8:00 AM Eastern invocation reuses an already prepared week without
+overwriting it and publishes the manifest through its scheduled target week.
+Other manual processor creation retains its existing manifest-publication default.
+
 Opening a week prefers the private draft, then published picks, then an empty
 schedule-derived table. Published weeks open read-only even when a draft exists.
 Editing requires acknowledgement; the warning remains visible, and resubmission
@@ -205,9 +216,14 @@ Reopen Saved Draft loads the current shared draft. Confirming discard clears the
 obsolete device copy only after the fetch succeeds, without a second recovery
 decision. Drafts retain aliases and N/P values.
 
-Defaults reuse the earliest unfinished week selection,
-falling back to the latest available schedule. Explicit unavailable weeks return
-404 without substitution. The newest available season is the initial season.
+The catalog lists weekly object keys and reads the public manifest once; it does
+not fetch weekly JSON contents. The default is the latest publicly available week
+in the newest season. A valid device selection takes precedence, and a prepared
+unpublished week is selectable without becoming the default. Opening or switching
+weeks reads only that schedule and its private draft. Malformed weekly content is
+rejected when opened; inconsistent keys or manifests block discovery and creation.
+Both the creation API and processor independently recheck current metadata before
+creation. Explicit unavailable weeks return 404 without substitution.
 CSV requests are limited to 250 KB in the browser and 500 KB at the API envelope.
 
 Submission confirms intent, validates using Numbers importer rules plus duplicate
