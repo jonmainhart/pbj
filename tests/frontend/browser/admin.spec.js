@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test';
 
-async function authenticated(page, {user = 'commissioner', etag = null, rows = [], published = false, selected, unpublished = false} = {}) {
+async function authenticated(page, {user = 'commissioner', etag = null, rows = [], published = false, selected, unpublished = false, games, headers} = {}) {
     await page.route('**/assets/admin-config.json', route => route.fulfill({json:{api:'https://admin.example',domain:'https://login.example',clientId:'spa',redirectUri:'http://127.0.0.1:8000/admin/'}}));
     await page.route('https://login.example/oauth2/token', route => route.fulfill({json:{access_token:'test-access',refresh_token:'test-refresh',expires_in:1800}}));
     await page.route('https://admin.example/**', route => {
@@ -10,7 +10,7 @@ async function authenticated(page, {user = 'commissioner', etag = null, rows = [
         if (path.endsWith('/3') && !unpublished) return route.fulfill({status:404,json:{message:'No schedule available for the selected week'}});
         if (path.endsWith('/draft')) return route.fulfill({json:{etag:'saved',issues:[]}});
         if (path.endsWith('/submit')) return route.fulfill({json:{etag:'submitted',issues:[],message:'Picks submitted and processed',result:{status:'ok'}}});
-        return route.fulfill({json:{games:[{id:'game',away:path.includes('/1')?'JAX':'NE',home:path.includes('/1')?'WSH':'SEA'}],headers:['NAME',path.includes('/1')?'JAX WSH':'NE SEA','TIEBREAKER'], rows, etag, published, source:etag ? 'draft' : published ? 'published' : 'empty', issues:[]}});
+        return route.fulfill({json:{games:games || [{id:'game',away:path.includes('/1')?'JAX':'NE',home:path.includes('/1')?'WSH':'SEA'}],headers:headers || ['NAME',path.includes('/1')?'JAX WSH':'NE SEA','TIEBREAKER'], rows, etag, published, source:etag ? 'draft' : published ? 'published' : 'empty', issues:[]}});
     });
     if (selected) await page.addInitScript(value => localStorage.setItem('pbj.draft.' + JSON.stringify(['https://admin.example','spa','commissioner']) + '.selection', JSON.stringify(value)), selected);
     await page.addInitScript(() => sessionStorage.setItem('pbj.pkce', JSON.stringify({verifier:'verifier',state:'state',created:Date.now()})));
@@ -1102,4 +1102,44 @@ test('active portal navigation is visible and follows the selected view on mobil
     await active(announcements, picks);
     await picks.click();
     await active(picks, announcements);
+});
+
+test('full roster edits retain recovery synchronously without rescanning controls or requesting data', async ({page}) => {
+    const games = Array.from({length:16}, (_, i) => ({id:`game${i}`,away:`A${i}`,home:`H${i}`}));
+    const headers = ['NAME', ...games.map(g => `${g.away} ${g.home}`), 'TIEBREAKER'];
+    const rows = Array.from({length:55}, (_, i) => [`Player ${i}`, ...games.map(g => g.away), '30']);
+    await authenticated(page, {games, headers, rows});
+    await page.clock.install();
+    const requests = [];
+    page.on('request', request => requests.push(request.url()));
+    const result = await page.evaluate(() => {
+        let scans = 0, writes = 0;
+        const query = document.querySelectorAll.bind(document), setItem = Storage.prototype.setItem;
+        document.querySelectorAll = selector => {
+            if (selector === '#editor button, #editor select, #editor input') scans++;
+            return query(selector);
+        };
+        Storage.prototype.setItem = function(key, value) { writes++; return setItem.call(this, key, value); };
+        const input = document.querySelector('[data-row="0"][data-column="0"]');
+        const start = performance.now();
+        for (let i = 0; i < 20; i++) {
+            input.value = `Typing ${i}`; input.dispatchEvent(new Event('input'));
+            const key = Object.keys(localStorage).find(key => key.endsWith('.2026.2'));
+            if (JSON.parse(localStorage.getItem(key)).table.rows[0][0] !== input.value) throw new Error('Recovery lagged');
+        }
+        return {scans, writes, ms:performance.now() - start};
+    });
+    console.log('55-player, 16-game typing:', result);
+    expect(result.scans).toBe(0);
+    expect(result.writes).toBe(20);
+    expect(requests).toEqual([]);
+    await expect(page.locator('#save')).toBeEnabled();
+    await expect(page.locator('#revert')).toBeVisible();
+    await page.getByLabel('Player 56 NAME', {exact:true}).fill('New Player');
+    await expect(page.locator('#picks tbody tr')).toHaveCount(57);
+    await page.getByRole('button', {name:'Remove player 56',exact:true}).click();
+    await expect(page.locator('#picks tbody tr')).toHaveCount(56);
+    await page.clock.fastForward(3000);
+    await expect(page.locator('#dirty')).toHaveText('All changes saved');
+    expect(requests.filter(url => url.endsWith('/draft'))).toHaveLength(1);
 });

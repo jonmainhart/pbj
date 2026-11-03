@@ -784,3 +784,75 @@ def test_portal_processor_rechecks_metadata_without_reading_weeks(setup, monkeyp
             creation_token=target["token"],
         )
     assert "data/2026/week03.json" not in s3.objects
+
+
+@pytest.mark.parametrize(
+    ("scenario", "gets", "puts", "aggregations"),
+    [
+        ("idle", 7, 0, 1),
+        ("completed", 7, 0, 1),
+        ("live", 7, 2, 1),
+        ("correction", 8, 2, 1),
+        ("recovery", 7, 1, 1),
+        ("creation", 1, 2, 0),
+        ("delayed", 1, 1, 0),
+    ],
+)
+def test_processing_operation_budget(
+    setup, monkeypatch, tmp_path, scenario, gets, puts, aggregations
+):
+    """Keep recovery work explicit while measuring a six-week offline S3 season."""
+    from scripts import aggregate_season, score_week
+
+    s3, provider = setup
+    for week in range(1, 7):
+        data = {**weekly(), "week": week}
+        path = tmp_path / f"week{week:02d}.json"
+        path.write_text(json.dumps(data))
+        score_week.score_week_file(path, 2026, week)
+        s3.objects[f"data/2026/{path.name}"] = path.read_bytes()
+    aggregate_season.aggregate_season_files(2026, tmp_path)
+    s3.objects[SEASON_KEY] = (tmp_path / "season.json").read_bytes()
+    if scenario in ("idle", "live"):
+        data = s3.data(WEEK_KEY)
+        data["games"][0]["status"] = "scheduled" if scenario == "idle" else "live"
+        if scenario == "idle":
+            data["games"][0]["scheduled_time"] = "2026-10-25T17:00:00+00:00"
+        else:
+            from dataclasses import replace
+
+            provider.get_week.return_value = [
+                replace(provider.get_week.return_value[0], away_score=20)
+            ]
+        s3.seed(WEEK_KEY, data)
+    if scenario == "correction":
+        s3.objects[CSV_KEY] = CSV
+    if scenario == "recovery":
+        # The week write succeeded previously; its season publication did not.
+        s3.seed(SEASON_KEY, {"season": 2026, "weeks_scored": [], "players": []})
+    if scenario == "delayed":
+        s3.seed("data/available-weeks.json", {"2026": [1, 2, 3, 4, 5]})
+    listing = Mock(wraps=s3.paginate)
+    reading = Mock(wraps=s3.get_object)
+    writing = Mock(wraps=s3.put_object)
+    aggregation = Mock(wraps=aggregate_season.aggregate_season_files)
+    monkeypatch.setattr(s3, "paginate", listing)
+    monkeypatch.setattr(s3, "get_object", reading)
+    monkeypatch.setattr(s3, "put_object", writing)
+    monkeypatch.setattr(aggregate_season, "aggregate_season_files", aggregation)
+    if scenario == "correction":
+        import_week()
+    elif scenario in ("creation", "delayed"):
+        invoke("create_week", week=7 if scenario == "creation" else 6)
+    else:
+        invoke("poll_games")
+    counts = (listing.call_count, reading.call_count, writing.call_count, aggregation.call_count)
+    print(f"{scenario}: list/get/put/aggregate={counts}")
+    assert counts == (1, gets, puts, aggregations)
+    week_reads = sum(
+        call.kwargs["Key"].endswith(".json") and "/week" in call.kwargs["Key"]
+        for call in reading.call_args_list
+    )
+    assert week_reads == (0 if scenario in ("creation", "delayed") else 6)
+    if scenario == "recovery":
+        assert s3.data(SEASON_KEY)["weeks_scored"] == list(range(1, 7))

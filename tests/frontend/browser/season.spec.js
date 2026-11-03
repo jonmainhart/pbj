@@ -64,3 +64,34 @@ test("season name loading failures fall back to humanized IDs", async ({ page })
     await page.getByRole("button", { name: "🏆 Season" }).click();
     await expect(page.locator(".season-name")).toHaveText("👑 1. Unknown Player");
 });
+
+for (const historical of [false, true]) {
+    test(`season requests only unresolved names (${historical ? 'historical participant' : 'current roster'})`, async ({page}) => {
+        const requests = [];
+        page.on('request', request => {
+            const path = new URL(request.url()).pathname;
+            if (/\/data\/2026\/.*json$/.test(path)) requests.push(path);
+        });
+        await mockDashboard(page, {
+            '/data/available-weeks.json': {'2026':[1,2,3,4]},
+            '/data/2026/week04.json': week({week:4,players:[player('alice', {name:'Current Alice'})]}),
+            '/data/2026/week03.json': week({week:3,players:[player('retired', {name:'Historical Player'}),player('alice', {name:'Old Alice'})]}),
+            '/data/2026/season.json': {season:2026,weeks_scored:[1,2,3,4],players:[seasonPlayer('alice'), ...(historical ? [seasonPlayer('retired')] : [])]},
+        });
+        await page.goto('/');
+        await expect(page.locator('#week-status')).toHaveText('Week 4 In Progress');
+        expect(requests).toEqual(['/data/2026/week04.json']);
+        await page.locator('#season-tab').click();
+        await expect(page.locator('.season-name')).toContainText(historical ? ['Current Alice', 'Historical Player'] : ['Current Alice']);
+        expect(requests).toEqual(['/data/2026/week04.json', '/data/2026/season.json', ...(historical ? ['/data/2026/week03.json'] : [])]);
+        await page.locator('#weekly-tab').click();
+        await page.locator('#season-tab').click();
+        expect(requests).toHaveLength(historical ? 3 : 2);
+        await page.locator('#weekly-tab').click();
+        await page.locator('#week-select').selectOption('3');
+        await expect(page.locator('#week-status')).toHaveText('Week 3 In Progress');
+        await page.locator('#season-tab').click();
+        await expect(page.locator('.season-name').first()).toContainText('Current Alice');
+        expect(requests.filter(path => path.endsWith('season.json'))).toHaveLength(1);
+    });
+}

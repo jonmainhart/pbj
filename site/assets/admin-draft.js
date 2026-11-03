@@ -17,10 +17,11 @@ export function readRecovery(storage, key) {
 
 export function createDraft({key, storage, etag, initial, read, write, erase, notify, delay = 3000, schedule = setTimeout, cancel = clearTimeout}) {
     const baseline = structuredClone(initial), originalEtag = etag;
+    const baselineCSV = baseline && !baseline.needsHeaderChoice ? toCSV(baseline) : null;
     // A failed request may have reached S3; reconciliation must still be conditional.
     let needsReconcile = false;
     let table = structuredClone(initial), revision = 0, timer, pending, paused = false, blocked = false, disposed = false, localValue;
-    let dirty = false, baseEtag = etag;
+    let dirty = false, baselineChanged = false, baseEtag = etag;
     function retain() {
         try {
             localValue = JSON.stringify({version:1, table, etag:baseEtag, updated:Date.now()});
@@ -33,7 +34,7 @@ export function createDraft({key, storage, etag, initial, read, write, erase, no
         catch { notify('storage', 'Unable to clear the device recovery copy.'); }
     }
     function differsFromBaseline() {
-        return Boolean(baseline) && (Boolean(table.needsHeaderChoice) !== Boolean(baseline.needsHeaderChoice) || toCSV(table) !== toCSV(baseline));
+        return Boolean(baseline) && (Boolean(table.needsHeaderChoice) !== Boolean(baseline.needsHeaderChoice) || toCSV(table) !== baselineCSV);
     }
     function queue() {
         cancel(timer);
@@ -50,7 +51,7 @@ export function createDraft({key, storage, etag, initial, read, write, erase, no
                 needsReconcile = true;
                 const result = await Promise.resolve().then(() => write(snapshot, etag));
                 etag = result.etag; baseEtag = etag;
-                needsReconcile = originalEtag === null || !baseline || toCSV(snapshot) !== toCSV(baseline);
+                needsReconcile = originalEtag === null || !baseline || toCSV(snapshot) !== baselineCSV;
                 if (revision === savedRevision) { dirty = false; remove(); notify('saved', 'All changes saved'); }
                 else { retain(); notify('edited', 'Unsaved changes'); }
                 return result;
@@ -88,7 +89,7 @@ export function createDraft({key, storage, etag, initial, read, write, erase, no
                     await erase(etag); etag = null;
                 }
             }
-            table = structuredClone(baseline); revision++; dirty = false; needsReconcile = false; baseEtag = etag;
+            table = structuredClone(baseline); revision++; dirty = false; baselineChanged = false; needsReconcile = false; baseEtag = etag;
             remove(); notify('saved', 'All changes saved');
             return structuredClone(baseline);
         } catch (error) {
@@ -99,7 +100,7 @@ export function createDraft({key, storage, etag, initial, read, write, erase, no
     }
     return {
         get changed() {
-            return needsReconcile || differsFromBaseline();
+            return needsReconcile || baselineChanged;
         },
         revert,
         async delete() {
@@ -121,15 +122,16 @@ export function createDraft({key, storage, etag, initial, read, write, erase, no
         get pending() { return pending; },
         edit(value) {
             table = structuredClone(value); revision++;
-            dirty = !baseline || differsFromBaseline() || needsReconcile || Boolean(pending) || blocked || baseEtag !== etag;
+            baselineChanged = differsFromBaseline();
+            dirty = !baseline || baselineChanged || needsReconcile || Boolean(pending) || blocked || baseEtag !== etag;
             if (!dirty) { cancel(timer); remove(); notify('saved', 'All changes saved'); return; }
             notify('edited', blocked ? 'A newer draft exists — reopen and review before restoring.' : 'Unsaved changes');
             retain(); queue();
         },
         save,
-        pause(value) { paused = value; cancel(timer); if (!value) queue(); },
+        pause(value) { if (paused === value) return; paused = value; cancel(timer); if (!value) queue(); },
         // Recovery never schedules a server write until the commissioner explicitly saves.
-        recover(record) { paused = true; baseEtag = record.etag; table = structuredClone(record.table); revision++; dirty = true; retain(); notify('recovered', 'Device copy restored. Review it, then Save Draft.'); },
+        recover(record) { paused = true; baseEtag = record.etag; table = structuredClone(record.table); baselineChanged = differsFromBaseline(); revision++; dirty = true; retain(); notify('recovered', 'Device copy restored. Review it, then Save Draft.'); },
         discard() { storage.removeItem(key); },
         dispose() { disposed = true; cancel(timer); },
     };

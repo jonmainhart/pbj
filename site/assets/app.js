@@ -12,6 +12,7 @@ import {
 
 import {
     getPlayerName,
+    loadSeasonPlayerNames,
     rememberPlayerNames,
 } from "./players.js";
 
@@ -30,6 +31,7 @@ const SEASON = 2026;
 
 let currentWeekData = null;
 let seasonData = null;
+let seasonLoading = false;
 
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -98,7 +100,7 @@ async function refreshCurrentWeek() {
     currentWeekData = data;
     seasonData = null;
 
-    rememberPlayerNames(data.players ?? []);
+    rememberPlayerNames(data.players ?? [], week);
     renderWeeklyView(data, getPlayerName);
   } catch {
     // Keep displaying the existing data if refresh fails.
@@ -191,7 +193,7 @@ async function loadWeek(week) {
     try {
         currentWeekData = await fetchWeek(SEASON, week);
 
-        rememberPlayerNames(currentWeekData.players ?? []);
+        rememberPlayerNames(currentWeekData.players ?? [], week);
 
         renderWeeklyView(currentWeekData, getPlayerName);
     } catch (error) {
@@ -211,19 +213,24 @@ async function loadWeek(week) {
 
 
 async function loadSeason() {
+    if (seasonLoading) return;
+    seasonLoading = true;
     setText(
         "#season-message",
         "Loading season standings…",
     );
 
     try {
-        seasonData = await fetchSeason(SEASON);
+        const data = await fetchSeason(SEASON);
 
         await loadSeasonPlayerNames(
-            seasonData.weeks_scored ?? [],
+            data.players ?? [],
+            data.weeks_scored ?? [],
+            week => fetchWeek(SEASON, week, {reuse:true}),
         );
 
-        renderSeason(seasonData, getPlayerName);
+        seasonData = data;
+        renderSeason(data, getPlayerName);
     } catch (error) {
         setText(
             "#season-message",
@@ -231,22 +238,9 @@ async function loadSeason() {
                 ? error.message
                 : "Unable to load season standings.",
         );
+    } finally {
+        seasonLoading = false;
     }
-}
-
-
-async function loadSeasonPlayerNames(weeks) {
-    const requests = weeks.map(async (week) => {
-        try {
-            const data = await fetchWeek(SEASON, week);
-
-            rememberPlayerNames(data.players ?? []);
-        } catch {
-            // Display IDs as a fallback if a weekly file cannot be loaded.
-        }
-    });
-
-    await Promise.all(requests);
 }
 
 

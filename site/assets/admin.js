@@ -7,7 +7,7 @@ const $ = id => document.getElementById(id);
 let intentionalNavigation = false;
 let expectedHeaders = [], games = [], drafts, scope, recovery, recoveryReview = false;
 let config, session, catalog, selection, table = {headers: [], rows: []}, busy = false;
-let published = false, locked = false;
+let published = false, locked = false, controlState;
 const announcements = announcementEditor(api);
 const unsaved = () => Boolean(drafts?.dirty);
 const status = text => { $('status').textContent = text; };
@@ -40,6 +40,7 @@ async function api(path, method = 'GET', body) {
 }
 function path(action = '') { return `/weeks/${selection.season}/${selection.week}${action ? '/' + action : ''}`; }
 function render() {
+    controlState = null;
     const head = $('picks').querySelector('thead'); head.replaceChildren();
     const tr = document.createElement('tr');
     table.headers.forEach((value, c) => {
@@ -54,7 +55,7 @@ function render() {
         label.className = 'block whitespace-pre text-center px-2 py-1'; label.setAttribute('aria-hidden', 'true'); present();
         th.className = 'header-cell';
         input.title = 'Edit column header'; input.addEventListener('headerdisplay', present);
-        input.oninput = () => { table.headers[c] = input.value; head.querySelectorAll('input').forEach(el => el.dispatchEvent(new Event('headerdisplay'))); changed(); syncControls(); };
+        input.oninput = () => { table.headers[c] = input.value; head.querySelectorAll('input').forEach(el => el.dispatchEvent(new Event('headerdisplay'))); changed(); };
         const editor = document.createElement('div'); editor.className = 'header-editor';
         editor.append(label, input); th.append(editor); tr.append(th);
     });
@@ -69,13 +70,13 @@ function render() {
             input.oninput = () => {
                 row[c] = input.value;
                 if (entry) {
-                    entry = false; table.rows.push(row); remove.hidden = false;
+                    controlState = null; entry = false; table.rows.push(row); remove.hidden = false;
                     appendRow(table.headers.map(() => ''), table.rows.length, true);
                 }
                 if (!entry && r === table.rows.length - 1 && row.every(value => value === '')) {
                     table.rows.pop(); body.lastElementChild.remove(); entry = true; remove.hidden = true;
                 }
-                changed(); syncControls();
+                changed();
             };
             td.append(input); tr.append(td);
         }
@@ -160,13 +161,15 @@ function syncControls() {
     const ambiguous = Boolean(table.needsHeaderChoice);
     $('header-choice').hidden = !ambiguous;
     $('headers').hidden = !needsHeaderRepair(table, expectedHeaders);
-    document.querySelectorAll('#editor button, #editor select, #editor input').forEach(el => {
+    const nextControlState = JSON.stringify([busy, locked, $('recovery').hidden, ambiguous]);
+    if (controlState !== nextControlState) document.querySelectorAll('#editor button, #editor select, #editor input').forEach(el => {
         const administrative = ['create-next', 'edit-published', 'delete-draft', 'reopen', 'discard-device', 'season', 'week'].includes(el.id);
         const recoveryChoice = administrative || el.id === 'restore-device';
         const needsInterpretation = ambiguous && (el.closest('#picks') || ['headers', 'validate', 'save', 'submit'].includes(el.id));
         el.disabled = busy || (locked && !administrative) || (!$('recovery').hidden && !recoveryChoice) || needsInterpretation;
     });
-    $('save').disabled ||= !drafts?.dirty || Boolean(drafts?.pending) || Boolean(drafts?.blocked);
+    controlState = nextControlState;
+    $('save').disabled = busy || locked || !$('recovery').hidden || ambiguous || !drafts?.dirty || Boolean(drafts?.pending) || Boolean(drafts?.blocked);
 }
 async function task(fn) {
     if (busy) return;

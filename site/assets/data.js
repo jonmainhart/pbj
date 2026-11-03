@@ -1,7 +1,18 @@
 "use strict";
 
 
-export async function fetchWeek(season, week) {
+const weeklyRequests = new Map();
+
+export function fetchWeek(season, week, {reuse = false} = {}) {
+    const key = `${season}/${week}`;
+    if (reuse && weeklyRequests.has(key)) return weeklyRequests.get(key);
+    const request = requestWeek(season, week);
+    weeklyRequests.set(key, request);
+    request.catch(() => { if (weeklyRequests.get(key) === request) weeklyRequests.delete(key); });
+    return request;
+}
+
+async function requestWeek(season, week) {
     const response = await fetch(
         `./data/${season}/week${formatWeek(week)}.json`,
         { cache: "no-store" },
