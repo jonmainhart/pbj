@@ -155,7 +155,7 @@ async function open(next, requireDraft = false) {
 
 function syncControls() {
     $('create-next').hidden = !catalog?.next_creation;
-    if (catalog?.next_creation) $('create-next').textContent = `Create Week ${catalog.next_creation.week}`;
+    if (catalog?.next_creation) $('create-next').textContent = `${catalog.next_creation.action === 'publish' ? 'Publish' : 'Create'} Week ${catalog.next_creation.week}`;
     $('published-warning').hidden = !published;
     $('edit-published').hidden = !locked;
     $('delete-draft').hidden = !drafts?.etag;
@@ -244,18 +244,32 @@ for (const id of ['season', 'week']) $(id).onchange = () => task(async () => {
 $('create-next').onclick = () => task(async () => {
     const target = catalog.next_creation;
     if (!target || !canSwitch(unsaved(), confirm)) return;
-    if (!confirm(`Create season ${target.season}, Week ${target.week}? This creates the schedule only. It will not appear in the public dashboard until scheduled publication on Tuesday at 8:00 AM Eastern. Picks remain in the private draft workflow.`)) return;
-    status('Creating schedule…');
+    const publishing = target.publish_manifest === true;
+    const operation = target.action === 'publish' ? 'Publish' : 'Create';
+    const effect = publishing
+        ? (operation === 'Publish' ? 'This publishes the existing week in the public dashboard without changing its schedule or picks.' : 'This creates the schedule and publishes the week in the public dashboard.')
+        : 'This prepares the schedule privately. It will not appear in the public dashboard until scheduled publication on Tuesday at 8:00 AM Eastern.';
+    if (!confirm(`${operation} season ${target.season}, Week ${target.week}? ${effect} Private drafts and submitted inputs are preserved.`)) return;
+    status(publishing ? 'Publishing week…' : 'Preparing schedule…');
     let result;
     try {
         result = await api('/schedules/next', 'POST', {token:target.token, confirm:true});
     } catch (error) {
-        // Reconcile the catalog without retrying an uncertain creation or discarding edits.
-        catalog = await api('/schedules');
+        // Reconcile without repeating an uncertain operation or discarding edits.
+        catalog.next_creation = null;
+        try { catalog = await api('/schedules'); }
+        catch { throw new Error('Operation outcome is uncertain. Refresh the portal before trying again. Your edits are preserved.'); }
         options('season', Object.keys(catalog.seasons), selection.season);
         options('week', catalog.seasons[selection.season], selection.week);
+        if (publishing && catalog.season === target.season && catalog.week >= target.week) {
+            const dirty = unsaved();
+            if (!dirty) await open({season:target.season, week:target.week});
+            status(`Week ${target.week} is published (confirmed after refresh).${dirty ? ' Your current edits are preserved.' : ''}`);
+            return;
+        }
         throw error;
     }
+    catalog.next_creation = null;
     catalog = await api('/schedules');
     await open({season:result.season, week:result.week});
     status(result.message);

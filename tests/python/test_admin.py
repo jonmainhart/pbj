@@ -1,6 +1,7 @@
 """Commissioner CSV validation contracts."""
 
 import json
+from datetime import UTC, datetime
 from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any
@@ -112,6 +113,33 @@ def test_concurrent_save_is_conflict(monkeypatch):
     )
     result = admin.lambda_handler(event("/weeks/2026/1/draft", "PUT", csv=""), None)
     assert result["statusCode"] == 409
+
+
+@pytest.mark.parametrize("code", ["PreconditionFailed", "ConditionalRequestConflict"])
+@pytest.mark.parametrize(
+    ("path", "method", "message"),
+    [
+        (
+            "/schedules/next",
+            "POST",
+            "Schedule state changed. Refresh the catalog before trying again.",
+        ),
+        (
+            "/weeks/2026/1/draft",
+            "PUT",
+            "Draft changed in another session. Reopen before saving.",
+        ),
+    ],
+)
+def test_conditional_conflict_message_matches_operation(monkeypatch, code, path, method, message):
+    monkeypatch.setenv("PBJ_ADMIN_CLIENT_ID", "spa")
+    dispatch = MagicMock(side_effect=ClientError({"Error": {"Code": code}}, "PutObject"))
+    monkeypatch.setattr(admin, "dispatch", dispatch)
+    request = event(path, method)
+    result = admin.lambda_handler(request, None)
+    assert result["statusCode"] == 409
+    assert json.loads(result["body"]) == {"message": message}
+    dispatch.assert_called_once_with(request)
 
 
 @pytest.mark.smoke
@@ -656,6 +684,9 @@ def creation_api(monkeypatch):
     monkeypatch.setenv("PBJ_DATA_PREFIX", "data/")
     monkeypatch.setenv("PBJ_ADMIN_CLIENT_ID", "spa")
     monkeypatch.setenv("PBJ_PROCESSOR_FUNCTION", "pbj-processor")
+    monkeypatch.setenv("PBJ_SEASON", "2026")
+    monkeypatch.setenv("PBJ_WEEK1_CREATION_DATE", "2026-09-08")
+    monkeypatch.setattr(processing, "now", lambda: datetime(2026, 9, 14, tzinfo=UTC))
     s3 = S3()
     s3.seed("data/2026/week01.json", weekly())
     s3.seed("data/available-weeks.json", {"2026": [1]})
@@ -846,6 +877,160 @@ def test_multiple_unpublished_weeks_fail_closed(monkeypatch):
         == 409
     )
     processor.invoke.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("timestamp", "prepared", "publish"),
+    [
+        ("2026-09-15T11:59:59+00:00", False, False),
+        ("2026-09-15T12:00:00+00:00", False, True),
+        ("2026-09-16T12:00:00+00:00", True, True),
+    ],
+)
+def test_portal_api_runs_authorized_creation_or_publication(
+    monkeypatch, timestamp, prepared, publish
+):
+    from aws import lambda_function, processing
+
+    from .test_aws_lambda import weekly
+
+    s3, _, processor = creation_api(monkeypatch)
+    monkeypatch.setattr(processing, "now", lambda: datetime.fromisoformat(timestamp))
+    if prepared:
+        s3.seed("data/2026/week02.json", weekly())
+    s3.objects["incoming/2026/drafts/week02.csv"] = b"draft"
+    s3.objects["incoming/2026/week02.csv"] = b"submitted"
+    before = dict(s3.objects)
+    provider = MagicMock()
+    provider.get_week.return_value = load_games(Path("data/2026/week01.json"))
+    monkeypatch.setattr(processing, "provider", lambda: provider)
+    catalog = json.loads(admin.lambda_handler(event("/schedules"), None)["body"])
+    target = catalog["next_creation"]
+    assert target["action"] == ("publish" if prepared else "create")
+    assert target["publish_manifest"] is publish
+    assert s3.writes == []
+
+    def invoke(**kwargs):
+        request = json.loads(kwargs["Payload"])
+        assert request["week"] == 2 and request["publish_manifest"] is publish
+        result = lambda_function.lambda_handler(request, None)
+        return {"Payload": BytesIO(json.dumps(result).encode())}
+
+    processor.invoke.side_effect = invoke
+    result = admin.lambda_handler(
+        event(
+            "/schedules/next",
+            "POST",
+            token=target["token"],
+            confirm=True,
+            week=18,
+            publish_manifest=not publish,
+            action="publish",
+        ),
+        None,
+    )
+    assert result["statusCode"] == 200
+    assert ("is published" in json.loads(result["body"])["message"]) is publish
+    assert s3.data("data/available-weeks.json") == {"2026": [1, 2] if publish else [1]}
+    assert all(s3.objects[k] == v for k, v in before.items() if k != "data/available-weeks.json")
+    assert provider.get_week.call_count == (0 if prepared else 1)
+    writes = list(s3.writes)
+    assert (
+        admin.lambda_handler(
+            event("/schedules/next", "POST", token=target["token"], confirm=True), None
+        )["statusCode"]
+        == 409
+    )
+    assert s3.writes == writes and processor.invoke.call_count == 1
+
+
+def test_portal_api_rechecks_cutoff_and_rejects_early_publish(monkeypatch):
+    from aws import processing
+
+    from .test_aws_lambda import weekly
+
+    s3, early, processor = creation_api(monkeypatch)
+    s3.seed("data/2026/week02.json", weekly())
+    before = dict(s3.objects)
+    assert (
+        json.loads(admin.lambda_handler(event("/schedules"), None)["body"])["next_creation"] is None
+    )
+    assert (
+        admin.lambda_handler(
+            event(
+                "/schedules/next", "POST", token=early["token"], confirm=True, publish_manifest=True
+            ),
+            None,
+        )["statusCode"]
+        == 409
+    )
+    monkeypatch.setattr(processing, "now", lambda: datetime(2026, 9, 15, 12, tzinfo=UTC))
+    due = json.loads(admin.lambda_handler(event("/schedules"), None)["body"])["next_creation"]
+    assert due["action"] == "publish"
+    assert (
+        admin.lambda_handler(event("/schedules/next", "POST", token=due["token"]), None)[
+            "statusCode"
+        ]
+        == 422
+    )
+    assert s3.objects == before and s3.writes == []
+    processor.invoke.assert_not_called()
+
+
+def test_portal_processor_rechecks_cutoff_after_api_confirmation(monkeypatch):
+    from aws import lambda_function, processing
+
+    s3, target, processor = creation_api(monkeypatch)
+    before = dict(s3.objects)
+
+    def invoke(**kwargs):
+        monkeypatch.setattr(processing, "now", lambda: datetime(2026, 9, 15, 12, tzinfo=UTC))
+        return lambda_function.lambda_handler(json.loads(kwargs["Payload"]), None)
+
+    processor.invoke.side_effect = invoke
+    assert (
+        admin.lambda_handler(
+            event("/schedules/next", "POST", token=target["token"], confirm=True), None
+        )["statusCode"]
+        == 502
+    )
+    assert s3.objects == before and s3.writes == []
+    assert processor.invoke.call_count == 1
+
+
+@pytest.mark.parametrize("completed", [False, True])
+def test_portal_api_reconciles_uncertain_publication_without_retry(monkeypatch, completed):
+    from aws import lambda_function, processing
+
+    from .test_aws_lambda import weekly
+
+    s3, _, processor = creation_api(monkeypatch)
+    s3.seed("data/2026/week02.json", weekly())
+    monkeypatch.setattr(processing, "now", lambda: datetime(2026, 9, 15, 12, tzinfo=UTC))
+    target = processing.next_creation(s3, storage.StorageConfig.from_environment())
+    assert target is not None
+    before = dict(s3.objects)
+
+    def timeout(**kwargs):
+        if completed:
+            lambda_function.lambda_handler(json.loads(kwargs["Payload"]), None)
+        raise TimeoutError()
+
+    processor.invoke.side_effect = timeout
+    result = admin.lambda_handler(
+        event("/schedules/next", "POST", token=target["token"], confirm=True), None
+    )
+    assert result["statusCode"] == (200 if completed else 409)
+    assert ("is published" in json.loads(result["body"])["message"]) is completed
+    assert processor.invoke.call_count == 1
+    assert s3.writes == (["data/available-weeks.json"] if completed else [])
+    assert all(s3.objects[k] == v for k, v in before.items() if k != "data/available-weeks.json")
+
+
+def test_admin_release_configuration_matches_processor():
+    config = " ".join(Path("aws/terraform/admin.tf").read_text().split())
+    assert "PBJ_SEASON = tostring(local.season)" in config
+    assert "PBJ_WEEK1_CREATION_DATE = local.week1_creation_date" in config
 
 
 def announcement_document():

@@ -50,7 +50,12 @@ def lambda_handler(event: Any, context: Any) -> dict[str, Any]:
         code = exc.response["Error"]["Code"]
         if code in ("PreconditionFailed", "ConditionalRequestConflict"):
             return response(
-                409, {"message": "Draft changed in another session. Reopen before saving."}
+                409,
+                {
+                    "message": "Schedule state changed. Refresh the catalog before trying again."
+                    if event.get("rawPath") == "/schedules/next"
+                    else "Draft changed in another session. Reopen before saving."
+                },
             )
         if code == "NoSuchKey":
             return response(404, {"message": "No schedule available for the selected week"})
@@ -97,7 +102,7 @@ def create_next(
     if target is None or body.get("token") != target["token"]:
         return response(409, {"message": "Schedule state changed; refresh the schedule catalog"})
     if body.get("confirm") is not True:
-        return response(422, {"message": "Confirm schedule creation"})
+        return response(422, {"message": "Confirm schedule creation or publication"})
     try:
         invoked = boto3.client(
             "lambda", config=Config(read_timeout=70, retries={"total_max_attempts": 1})
@@ -109,7 +114,7 @@ def create_next(
                     action="create_week",
                     season=target["season"],
                     week=target["week"],
-                    publish_manifest=False,
+                    publish_manifest=target["publish_manifest"],
                     creation_token=target["token"],
                 )
             ).encode(),
@@ -127,21 +132,36 @@ def create_next(
                 {
                     "season": target["season"],
                     "week": target["week"],
-                    "message": "Schedule ready. Public availability follows scheduled publication.",
+                    "message": f"Week {target['week']} is published."
+                    if target["publish_manifest"]
+                    else "Schedule prepared privately. Public availability follows "
+                    "scheduled publication.",
                 },
             )
     except Exception:
         # Never retry an invocation whose result is uncertain.
         result = None
-    schedule = storage.read(
-        s3, config, config.key(f"{target['season']}/week{target['week']:02d}.json")
-    )
+    catalog = processing.discover_schedules(s3, config)
+    if (
+        target["publish_manifest"]
+        and catalog["season"] == target["season"]
+        and catalog["week"] >= target["week"]
+    ):
+        return response(
+            200,
+            {
+                "season": target["season"],
+                "week": target["week"],
+                "message": f"Week {target['week']} is published (confirmed after refresh).",
+            },
+        )
+    exists = target["week"] in catalog["seasons"].get(str(target["season"]), [])
     return response(
-        409 if schedule else 502,
+        409 if exists else 502,
         {
-            "message": "Schedule now exists; refresh to open it."
-            if schedule
-            else "Creation was not confirmed. Refresh the catalog before trying again.",
+            "message": "Schedule exists but is not published; refresh the catalog."
+            if exists
+            else "Operation was not confirmed. Refresh the catalog before trying again.",
         },
     )
 

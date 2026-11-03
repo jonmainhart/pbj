@@ -1008,6 +1008,126 @@ test('uncertain creation refreshes metadata and preserves the selected editor wi
     expect(creations).toBe(1);
 });
 
+for (const action of ['create', 'publish']) {
+    test(`due week ${action} confirms publication, refreshes the catalog and selects the week`, async ({page}) => {
+        await authenticated(page, {unpublished:true});
+        // The server's decision remains authoritative even with an incorrect browser clock.
+        await page.clock.install({time:new Date('2000-01-01T00:00:00Z')});
+        let completed = false, posts = 0, release;
+        const requests = [];
+        await page.route('https://admin.example/schedules', route => route.fulfill({json:{
+            seasons:{2026:completed || action === 'publish' ? [1,2,3] : [1,2]},
+            season:2026,week:completed ? 3 : 2,user_id:'commissioner',
+            next_creation:completed ? {season:2026,week:4,action:'create',publish_manifest:false,token:'next'}
+                : {season:2026,week:3,action,publish_manifest:true,token:'due'},
+        }}));
+        await page.route('https://admin.example/schedules/next', async route => {
+            posts++;
+            expect(route.request().postDataJSON()).toEqual({token:'due',confirm:true});
+            await new Promise(resolve => { release = resolve; });
+            completed = true;
+            await route.fulfill({json:{season:2026,week:3,message:'Week 3 is published.'}});
+        });
+        await page.goto('/admin/?code=code&state=state');
+        const button = page.getByRole('button', {name:`${action === 'publish' ? 'Publish' : 'Create'} Week 3`,exact:true});
+        await expect(button).toBeEnabled();
+        page.once('dialog', d => d.dismiss());
+        await button.click(); expect(posts).toBe(0);
+        page.once('dialog', d => {
+            expect(d.message()).toContain(action === 'publish' ? 'without changing its schedule or picks' : 'creates the schedule and publishes');
+            return d.accept();
+        });
+        page.on('request', r => {
+            if (r.url().startsWith('https://admin.example/')) requests.push([r.method(), new URL(r.url()).pathname]);
+        });
+        await button.click();
+        await expect(page.locator('#status')).toHaveText('Publishing week…');
+        await expect(button).toBeDisabled();
+        await expect.poll(() => posts).toBe(1);
+        release();
+        await expect(page.locator('#week')).toHaveValue('3');
+        await expect(page.locator('#status')).toHaveText('Week 3 is published.');
+        await expect(page.getByRole('button', {name:'Create Week 4',exact:true})).toBeVisible();
+        expect(requests).toEqual([['POST','/schedules/next'],['GET','/schedules'],['GET','/weeks/2026/3']]);
+        expect(posts).toBe(1);
+    });
+}
+
+test('a prepared future week has no publication action even with a future browser clock', async ({page}) => {
+    await authenticated(page, {unpublished:true});
+    await page.route('https://admin.example/schedules', route => route.fulfill({json:{
+        seasons:{2026:[1,2,3]},season:2026,week:2,user_id:'commissioner',next_creation:null,
+    }}));
+    await page.goto('/admin/?code=code&state=state');
+    await expect(page.locator('#week')).toHaveValue('2');
+    await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
+    await expect(page.locator('#create-next')).toBeHidden();
+    await page.locator('#week').selectOption('3');
+    await expect(page.locator('#status')).toHaveText('Season 2026 · Week 3');
+    await expect(page.locator('#create-next')).toBeHidden();
+});
+
+for (const completed of [false,true]) for (const dirty of [false,true]) {
+    test(`uncertain publication reconciles without retry (completed=${completed}, dirty=${dirty})`, async ({page}) => {
+        await authenticated(page, {unpublished:true});
+        await page.clock.install();
+        let attempted = false, posts = 0;
+        await page.route('https://admin.example/schedules', route => route.fulfill({json:{
+            seasons:{2026:[1,2,3]},season:2026,week:attempted && completed ? 3 : 2,user_id:'commissioner',
+            next_creation:attempted && completed ? null : {
+                season:2026,week:3,action:'publish',publish_manifest:true,token:attempted ? 'fresh' : 'due',
+            },
+        }}));
+        await page.route('https://admin.example/schedules/next', route => {
+            posts++; attempted = true;
+            return route.fulfill({status:502,json:{message:'Publication was not confirmed.'}});
+        });
+        await page.goto('/admin/?code=code&state=state');
+        await expect(page.getByRole('button', {name:'Publish Week 3',exact:true})).toBeEnabled();
+        if (dirty) await page.getByLabel('Player 1 NAME',{exact:true}).fill('Keep my edits');
+        const requests = [];
+        page.on('request', r => {
+            if (r.url().startsWith('https://admin.example/')) requests.push([r.method(), new URL(r.url()).pathname]);
+        });
+        page.on('dialog', d => d.accept());
+        await page.locator('#create-next').click();
+        await expect(page.locator('#status')).toHaveText(completed
+            ? `Week 3 is published (confirmed after refresh).${dirty ? ' Your current edits are preserved.' : ''}`
+            : 'Publication was not confirmed.');
+        await expect(page.locator('#week')).toHaveValue(completed && !dirty ? '3' : '2');
+        if (dirty) {
+            await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Keep my edits');
+            await expect(page.locator('#dirty')).toHaveText('Unsaved changes');
+        }
+        expect(requests).toEqual([['POST','/schedules/next'],['GET','/schedules'],
+            ...(completed && !dirty ? [['GET','/weeks/2026/3']] : [])]);
+        expect(posts).toBe(1);
+        await expect(page.locator('#create-next'))[completed ? 'toBeHidden' : 'toBeEnabled']();
+    });
+}
+
+test('uncertain publication with a failed catalog refresh disables the stale action', async ({page}) => {
+    await authenticated(page, {unpublished:true});
+    await page.clock.install();
+    let attempted = false, posts = 0;
+    await page.route('https://admin.example/schedules', route => route.fulfill(attempted
+        ? {status:502,json:{message:'Catalog unavailable'}}
+        : {json:{seasons:{2026:[1,2,3]},season:2026,week:2,user_id:'commissioner',
+            next_creation:{season:2026,week:3,action:'publish',publish_manifest:true,token:'due'}}}));
+    await page.route('https://admin.example/schedules/next', route => {
+        attempted = true; posts++;
+        return route.abort('failed');
+    });
+    await page.goto('/admin/?code=code&state=state');
+    await page.getByLabel('Player 1 NAME',{exact:true}).fill('Keep my edits');
+    page.on('dialog', d => d.accept());
+    await page.locator('#create-next').click();
+    await expect(page.locator('#status')).toContainText('Refresh the portal before trying again');
+    await expect(page.locator('#create-next')).toBeHidden();
+    await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Keep my edits');
+    expect(posts).toBe(1);
+});
+
 test('announcement editing preserves picks and handles errors, conflicts, publication and clearing', async ({page}) => {
     await authenticated(page);
     let current = {top:{text:'Published',link:null},bottom:{text:'',link:null}};

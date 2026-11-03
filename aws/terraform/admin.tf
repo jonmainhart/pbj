@@ -100,10 +100,12 @@ resource "aws_lambda_function" "admin" {
   reserved_concurrent_executions = 1
   environment {
     variables = {
-      PBJ_DATA_BUCKET        = local.data_bucket
-      PBJ_DATA_PREFIX        = local.data_prefix
-      PBJ_ADMIN_CLIENT_ID    = aws_cognito_user_pool_client.admin.id
-      PBJ_PROCESSOR_FUNCTION = aws_lambda_function.processor.function_name
+      PBJ_DATA_BUCKET         = local.data_bucket
+      PBJ_DATA_PREFIX         = local.data_prefix
+      PBJ_ADMIN_CLIENT_ID     = aws_cognito_user_pool_client.admin.id
+      PBJ_PROCESSOR_FUNCTION  = aws_lambda_function.processor.function_name
+      PBJ_SEASON              = tostring(local.season)
+      PBJ_WEEK1_CREATION_DATE = local.week1_creation_date
     }
   }
   depends_on = [aws_iam_role_policy.admin, aws_cloudwatch_log_group.admin]

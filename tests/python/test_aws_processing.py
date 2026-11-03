@@ -636,15 +636,16 @@ def test_poll_updates_scores_and_preserves_original_fields(setup, picks, status)
     assert invoke("poll_games")["written"] == []
 
 
-def prepare_next(s3):
+def prepare_next(s3, monkeypatch):
+    monkeypatch.setattr(processing, "now", lambda: datetime(2026, 9, 14, tzinfo=UTC))
     invoke("create_week", season=2026, week=1)
     config = storage.StorageConfig.from_environment()
     return processing.next_creation(s3, config)
 
 
-def test_portal_creation_then_scheduled_publication_preserves_all_data(setup):
+def test_portal_creation_then_scheduled_publication_preserves_all_data(setup, monkeypatch):
     s3, provider = setup
-    target = prepare_next(s3)
+    target = prepare_next(s3, monkeypatch)
     before = dict(s3.objects)
     result = invoke(
         "create_week", season=2026, week=2, publish_manifest=False, creation_token=target["token"]
@@ -703,9 +704,9 @@ def test_portal_ineligible_state_fails_closed(setup, public, created):
     assert s3.writes == []
 
 
-def test_portal_creation_race_never_overwrites_or_publishes(setup):
+def test_portal_creation_race_never_overwrites_or_publishes(setup, monkeypatch):
     s3, provider = setup
-    target = prepare_next(s3)
+    target = prepare_next(s3, monkeypatch)
     before_manifest = s3.objects["data/available-weeks.json"]
 
     def race(*args, **kwargs):
@@ -725,9 +726,9 @@ def test_portal_creation_race_never_overwrites_or_publishes(setup):
     assert s3.objects["data/available-weeks.json"] == before_manifest
 
 
-def test_portal_provider_failure_preserves_state(setup):
+def test_portal_provider_failure_preserves_state(setup, monkeypatch):
     s3, provider = setup
-    target = prepare_next(s3)
+    target = prepare_next(s3, monkeypatch)
     before = dict(s3.objects)
     provider.get_week.side_effect = RuntimeError("Provider unavailable")
     with pytest.raises(RuntimeError, match="Provider unavailable"):
@@ -764,7 +765,7 @@ def test_portal_processor_rechecks_metadata_without_reading_weeks(setup, monkeyp
     from unittest.mock import MagicMock
 
     s3, _ = setup
-    target = prepare_next(s3)
+    target = prepare_next(s3, monkeypatch)
     s3.get_object = MagicMock(wraps=s3.get_object)
     s3.get_paginator = MagicMock(wraps=s3.get_paginator)
     invoke(
@@ -784,6 +785,191 @@ def test_portal_processor_rechecks_metadata_without_reading_weeks(setup, monkeyp
             creation_token=target["token"],
         )
     assert "data/2026/week03.json" not in s3.objects
+
+
+def seed_portal_week(s3, week, prepared):
+    for number in range(1, week + int(prepared)):
+        s3.seed(f"data/2026/week{number:02d}.json", {**weekly(), "week": number})
+    s3.seed("data/available-weeks.json", {"2026": list(range(1, week))})
+    s3.objects[f"incoming/2026/drafts/week{week:02d}.csv"] = b"private draft"
+    s3.objects[f"incoming/2026/week{week:02d}.csv"] = b"submitted picks"
+
+
+@pytest.mark.parametrize(
+    ("week", "release"),
+    [
+        (8, "2026-10-27T12:00:00+00:00"),
+        (9, "2026-11-03T13:00:00+00:00"),
+        (18, "2027-01-05T13:00:00+00:00"),
+    ],
+)
+@pytest.mark.parametrize("seconds", [-1, 0, 1, 86400])
+@pytest.mark.parametrize("prepared", [False, True])
+def test_portal_release_boundary_and_preservation(
+    setup, monkeypatch, week, release, seconds, prepared
+):
+    from datetime import timedelta
+
+    s3, provider = setup
+    seed_portal_week(s3, week, prepared)
+    before = dict(s3.objects)
+    clock = datetime.fromisoformat(release) + timedelta(seconds=seconds)
+    monkeypatch.setattr(processing, "now", lambda: clock)
+    config = storage.StorageConfig.from_environment()
+    catalog = processing.discover_schedules(s3, config)
+    assert catalog["week"] == week - 1
+    assert s3.objects == before and s3.writes == []
+    target = catalog["next_creation"]
+    if prepared and seconds < 0:
+        assert target is None
+        with pytest.raises(ValueError, match="state changed"):
+            invoke("create_week", week=week, publish_manifest=True, creation_token="forged")  # noqa: S106
+        assert s3.objects == before and s3.writes == []
+        provider.get_week.assert_not_called()
+        return
+    due = seconds >= 0
+    assert target["action"] == ("publish" if prepared else "create")
+    assert target["publish_manifest"] is due
+    assert target["week"] == week
+    assert datetime.fromisoformat(target["release_at"]) == datetime.fromisoformat(release)
+    result = invoke("create_week", week=week, publish_manifest=due, creation_token=target["token"])
+    assert result["fetched"] is not prepared
+    assert result["written"] == (
+        ([] if prepared else [f"data/2026/week{week:02d}.json"])
+        + (["data/available-weeks.json"] if due else [])
+    )
+    assert provider.get_week.call_count == (0 if prepared else 1)
+    assert s3.data("data/available-weeks.json") == {"2026": list(range(1, week + int(due)))}
+    assert all(s3.objects[k] == v for k, v in before.items() if k != "data/available-weeks.json")
+    writes = list(s3.writes)
+    with pytest.raises(ValueError, match="state changed"):
+        invoke("create_week", week=week, publish_manifest=due, creation_token=target["token"])
+    assert s3.writes == writes
+
+
+def test_portal_cutoff_invalidates_preparation_confirmation(setup, monkeypatch):
+    s3, provider = setup
+    seed_portal_week(s3, 9, False)
+    config = storage.StorageConfig.from_environment()
+    monkeypatch.setattr(processing, "now", lambda: datetime(2026, 11, 3, 12, 59, 59, tzinfo=UTC))
+    early = processing.next_creation(s3, config)
+    assert early is not None
+    before = dict(s3.objects)
+    # A valid preparation token cannot authorize early publication.
+    with pytest.raises(ValueError, match="state changed"):
+        invoke("create_week", week=9, publish_manifest=True, creation_token=early["token"])
+    monkeypatch.setattr(processing, "now", lambda: datetime(2026, 11, 3, 13, tzinfo=UTC))
+    due = processing.next_creation(s3, config)
+    assert due is not None
+    assert due["token"] != early["token"]
+    for publish in (False, True):
+        with pytest.raises(ValueError, match="state changed"):
+            invoke("create_week", week=9, publish_manifest=publish, creation_token=early["token"])
+    assert s3.objects == before and s3.writes == []
+    provider.get_week.assert_not_called()
+
+
+@pytest.mark.parametrize("season,week", [(2025, 9), (2026, 8), (2026, 10)])
+def test_portal_publication_rejects_out_of_order_target(setup, monkeypatch, season, week):
+    s3, provider = setup
+    seed_portal_week(s3, 9, True)
+    monkeypatch.setattr(processing, "now", lambda: datetime(2026, 11, 3, 13, tzinfo=UTC))
+    target = processing.next_creation(s3, storage.StorageConfig.from_environment())
+    assert target is not None
+    before = dict(s3.objects)
+    with pytest.raises(ValueError, match="state changed"):
+        invoke(
+            "create_week",
+            season=season,
+            week=week,
+            publish_manifest=True,
+            creation_token=target["token"],
+        )
+    assert s3.objects == before and s3.writes == []
+    provider.get_week.assert_not_called()
+
+
+@pytest.mark.parametrize("prepared", [False, True])
+@pytest.mark.parametrize("code", ["PreconditionFailed", "ConditionalRequestConflict"])
+def test_portal_publication_conflict_and_reconciliation(setup, monkeypatch, prepared, code):
+    s3, provider = setup
+    seed_portal_week(s3, 9, prepared)
+    monkeypatch.setattr(processing, "now", lambda: datetime(2026, 11, 3, 13, tzinfo=UTC))
+    config = storage.StorageConfig.from_environment()
+    target = processing.next_creation(s3, config)
+    assert target is not None
+    before = dict(s3.objects)
+    put = s3.put_object
+
+    def conflict(**kwargs):
+        if kwargs["Key"] == "data/available-weeks.json":
+            raise error(code)
+        return put(**kwargs)
+
+    monkeypatch.setattr(s3, "put_object", conflict)
+    with pytest.raises(ClientError):
+        invoke("create_week", week=9, publish_manifest=True, creation_token=target["token"])
+    assert all(s3.objects[k] == v for k, v in before.items())
+    created = s3.objects["data/2026/week09.json"]
+    retry = processing.next_creation(s3, config)
+    assert retry is not None
+    assert retry["action"] == "publish"
+    monkeypatch.setattr(s3, "put_object", put)
+    result = invoke("create_week", week=9, publish_manifest=True, creation_token=retry["token"])
+    assert result["written"] == ["data/available-weeks.json"]
+    assert s3.objects["data/2026/week09.json"] == created
+    assert provider.get_week.call_count == (0 if prepared else 1)
+
+
+def test_portal_manifest_write_uses_authorized_snapshot(setup, monkeypatch):
+    s3, provider = setup
+    seed_portal_week(s3, 9, False)
+    monkeypatch.setattr(processing, "now", lambda: datetime(2026, 11, 3, 13, tzinfo=UTC))
+    target = processing.next_creation(s3, storage.StorageConfig.from_environment())
+    assert target is not None
+    concurrent = json.dumps({"2026": list(range(1, 9))}, indent=4).encode()
+
+    def race(*args, **kwargs):
+        s3.objects["data/available-weeks.json"] = concurrent
+        return provider.get_week.return_value
+
+    provider.get_week.side_effect = race
+    with pytest.raises(ClientError):
+        invoke("create_week", week=9, publish_manifest=True, creation_token=target["token"])
+    assert s3.objects["data/available-weeks.json"] == concurrent
+    assert s3.writes == ["data/2026/week09.json"]
+
+
+def test_portal_recovery_uses_configured_season_and_tuesday(setup, monkeypatch):
+    s3, _ = setup
+    seed_portal_week(s3, 9, True)
+    config = storage.StorageConfig.from_environment()
+    monkeypatch.setenv("PBJ_SEASON", "2027")
+    assert processing.next_creation(s3, config) is None
+    monkeypatch.setenv("PBJ_SEASON", "2026")
+    monkeypatch.setenv("PBJ_WEEK1_CREATION_DATE", "2026-09-09")
+    assert processing.next_creation(s3, config) is None
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        {"publish_manifest": True, "creation_token": ""},
+        {"publish_manifest": True, "creation_token": 1},
+        {"creation_token": "token"},
+        {
+            "publish_manifest": True,
+            "creation_token": "token",
+            "scheduled_time": "2026-11-03T13:00:00Z",
+        },
+    ],
+)
+def test_invalid_portal_publication_event_never_calls_aws(setup, monkeypatch, event):
+    client = Mock()
+    monkeypatch.setattr(storage, "client", client)
+    with pytest.raises(ValueError):
+        invoke("create_week", **({} if "scheduled_time" in event else {"week": 9}), **event)
+    client.assert_not_called()
 
 
 @pytest.mark.parametrize(
