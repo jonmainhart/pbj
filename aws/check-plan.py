@@ -50,6 +50,7 @@ ALLOWED.update(
         "GET /weeks/{season}/{week}",
         "POST /weeks/{season}/{week}/validate",
         "PUT /weeks/{season}/{week}/draft",
+        "DELETE /weeks/{season}/{week}/draft",
         "POST /weeks/{season}/{week}/submit",
     )
 )

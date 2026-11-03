@@ -213,6 +213,7 @@
         "cognito-idp:CreateManagedLoginBranding",
         "cognito-idp:DescribeManagedLoginBranding",
         "cognito-idp:UpdateManagedLoginBranding",
+        "cognito-idp:DeleteManagedLoginBranding",
         "cognito-idp:DescribeManagedLoginBrandingByClient"
       ],
       "Resource": "arn:aws:cognito-idp:us-east-2:ACCOUNT_ID:userpool/ADMIN_POOL_ID"

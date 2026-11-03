@@ -55,6 +55,20 @@ GUARD = Path(__file__).resolve().parents[2] / "aws" / "check-plan.py"
                 (["create", "delete"], False),
             )
         ],
+        *[
+            (
+                'aws_apigatewayv2_route.admin["DELETE /weeks/{season}/{week}/draft"]',
+                actions,
+                accepted,
+            )
+            for actions, accepted in (
+                (["create"], True),
+                (["update"], True),
+                (["delete"], False),
+                (["delete", "create"], False),
+            )
+        ],
+        ('aws_apigatewayv2_route.admin["DELETE /weeks/{season}/{week}"]', ["create"], False),
         ("aws_s3_object.picks", ["create"], False),
         ("aws_iam_role.power_user", ["update"], False),
         ("aws_iam_role_policy.processor", ["delete"], False),

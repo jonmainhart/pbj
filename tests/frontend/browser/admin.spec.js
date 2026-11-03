@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test';
 
-async function authenticated(page, {user = 'commissioner', etag = null, rows = []} = {}) {
+async function authenticated(page, {user = 'commissioner', etag = null, rows = [], published = false} = {}) {
     await page.route('**/assets/admin-config.json', route => route.fulfill({json:{api:'https://admin.example',domain:'https://login.example',clientId:'spa',redirectUri:'http://127.0.0.1:8000/admin/'}}));
     await page.route('https://login.example/oauth2/token', route => route.fulfill({json:{access_token:'test-access',refresh_token:'test-refresh',expires_in:1800}}));
     await page.route('https://admin.example/**', route => {
@@ -10,7 +10,7 @@ async function authenticated(page, {user = 'commissioner', etag = null, rows = [
         if (path.endsWith('/3')) return route.fulfill({status:404,json:{message:'No schedule available for the selected week'}});
         if (path.endsWith('/draft')) return route.fulfill({json:{etag:'saved',issues:[]}});
         if (path.endsWith('/submit')) return route.fulfill({json:{etag:'submitted',issues:[],message:'Picks submitted and processed',result:{status:'ok'}}});
-        return route.fulfill({json:{games:[{id:'game',away:path.includes('/1')?'JAX':'NE',home:path.includes('/1')?'WSH':'SEA'}],headers:['NAME',path.includes('/1')?'JAX WSH':'NE SEA','TIEBREAKER'], rows, etag, issues:[]}});
+        return route.fulfill({json:{games:[{id:'game',away:path.includes('/1')?'JAX':'NE',home:path.includes('/1')?'WSH':'SEA'}],headers:['NAME',path.includes('/1')?'JAX WSH':'NE SEA','TIEBREAKER'], rows, etag, published, source:etag ? 'draft' : published ? 'published' : 'empty', issues:[]}});
     });
     await page.addInitScript(() => sessionStorage.setItem('pbj.pkce', JSON.stringify({verifier:'verifier',state:'state',created:Date.now()})));
     await page.goto('/admin/?code=code&state=state');
@@ -601,9 +601,9 @@ test('native save availability follows edits, autosave, uploads, interpretation 
 
 test('matching content does not erase unresolved older recovery provenance', async ({page}) => {
     await page.clock.install();
-    await authenticated(page, {etag:'old',rows:[['Alice','SEA','30']]});
+    await authenticated(page, {etag:'old',rows:[['Original','SEA','30']]});
     const name = page.getByLabel('Player 1 NAME',{exact:true});
-    await name.fill('Temporary'); await name.fill('Alice');
+    await name.fill('Alice');
     await authenticated(page, {etag:'new',rows:[['Alice','SEA','30']]});
     await expect(page.locator('#recovery')).toBeVisible();
     await expect(page.locator('#recovery-message')).toContainText('A newer draft exists');
@@ -618,7 +618,8 @@ test('published picks open clean, autosave only after editing, and retain device
     page.on('request', request => {
         if (request.url().endsWith('/draft')) writes.push(request.postDataJSON());
     });
-    await authenticated(page, {rows:[['Alice','SEA','42.5'],['Bob','N/P','0']]});
+    await authenticated(page, {published:true,rows:[['Alice','SEA','42.5'],['Bob','N/P','0']]});
+    page.once('dialog',d => d.accept()); await page.locator('#edit-published').click();
     await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Alice');
     await expect(page.getByLabel('Player 1 TIEBREAKER',{exact:true})).toHaveValue('42.5');
     await expect(page.locator('#picks tbody tr')).toHaveCount(3);
@@ -633,9 +634,264 @@ test('published picks open clean, autosave only after editing, and retain device
     expect(writes[0].etag).toBeNull();
     expect(writes[0].csv).toContain('"Alice","NE","42.5"');
     await page.getByLabel('Player 1 TIEBREAKER',{exact:true}).fill('50');
-    await authenticated(page, {rows:[['Alice','SEA','42.5'],['Bob','N/P','0']]});
+    await authenticated(page, {published:true,rows:[['Alice','SEA','42.5'],['Bob','N/P','0']]});
+    page.once('dialog',d => d.accept()); await page.locator('#edit-published').click();
     await expect(page.locator('#recovery')).toBeVisible();
     await expect(page.getByLabel('Player 1 TIEBREAKER',{exact:true})).toHaveValue('42.5');
     await page.locator('#restore-device').click();
     await expect(page.getByLabel('Player 1 TIEBREAKER',{exact:true})).toHaveValue('50');
 });
+
+for (const etag of [null, 'draft']) {
+    test(`published protection with draft ${etag} covers mutation paths and separate submission`, async ({page}) => {
+        await authenticated(page, {etag,published:true,rows:[['Alice','SEA','30']]});
+        await expect(page.locator('#published-warning')).toBeVisible();
+        for (const selector of ['#file','#empty','#restore-device','#submit','[data-row="0"][data-column="0"]','[data-row="-1"][data-column="0"]']) {
+            await expect(page.locator(selector)).toBeDisabled();
+        }
+        await page.evaluate(() => {
+            const transfer = new DataTransfer();
+            transfer.items.add(new File(['NAME,NE SEA,TIEBREAKER\nDropped,NE,50'], 'picks.csv', {type:'text/csv'}));
+            document.getElementById('drop').dispatchEvent(new DragEvent('drop', {dataTransfer:transfer,bubbles:true,cancelable:true}));
+        });
+        await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Alice');
+        page.once('dialog', d => d.dismiss()); await page.locator('#edit-published').click();
+        await expect(page.locator('#empty')).toBeDisabled();
+        page.once('dialog', d => d.accept()); await page.locator('#edit-published').click();
+        await expect(page.locator('#published-warning')).toBeVisible();
+        await page.getByLabel('Player 1 NAME',{exact:true}).fill('Bob');
+        const submissions = [];
+        page.on('request', r => { if (r.url().endsWith('/submit')) submissions.push(r.postDataJSON()); });
+        page.once('dialog', d => d.dismiss()); await page.locator('#submit').click();
+        expect(submissions).toEqual([]);
+        page.once('dialog', d => d.accept()); await page.locator('#submit').click();
+        await expect(page.locator('#status')).toContainText('submitted');
+        expect(submissions[0].acknowledge_published).toBe(true);
+    });
+}
+for (const source of ['empty','published','draft']) {
+    test(`revert from ${source} before and after autosave`, async ({page}) => {
+        await page.clock.install();
+        const rows = source === 'empty' ? [] : [['Alice','SEA','30']];
+        await authenticated(page,{rows,etag:source === 'draft' ? 'original' : null,published:source === 'published'});
+        if (source === 'published') { page.once('dialog', d => d.accept()); await page.locator('#edit-published').click(); }
+        await expect(page.locator('#revert')).toBeHidden();
+        const requests = [];
+        page.on('request', r => { if (r.url().endsWith('/draft')) requests.push({method:r.method(),body:r.postDataJSON()}); });
+        for (const autosave of [false,true]) {
+            await page.getByLabel('Player 1 NAME',{exact:true}).fill('Changed');
+            await expect(page.locator('#revert')).toBeVisible();
+            if (autosave) { await page.clock.runFor(3100); await expect(page.locator('#save')).toBeDisabled(); }
+            page.once('dialog', d => d.accept()); await page.locator('#revert').click();
+            await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue(rows[0]?.[0] || '');
+            await expect(page.locator('#revert')).toBeHidden();
+            const count = requests.length; await page.clock.runFor(6000); expect(requests).toHaveLength(count);
+            if (!autosave) expect(requests).toEqual([]);
+        }
+        expect(requests.map(r => r.method)).toEqual(source === 'draft' ? ['PUT','PUT'] : ['PUT','DELETE']);
+    });
+}
+test('draft deletion is contextual, confirmed, conditional and preserves work on failure', async ({page}) => {
+    await authenticated(page);
+    await expect(page.locator('#delete-draft')).toBeHidden(); await expect(page.locator('#reopen')).toBeHidden();
+    await authenticated(page,{etag:'original',rows:[['Alice','SEA','30']]});
+    await expect(page.locator('#delete-draft')).toBeVisible(); await expect(page.locator('#reopen')).toBeHidden();
+    await page.getByLabel('Player 1 NAME',{exact:true}).fill('Bob');
+    await expect(page.locator('#reopen')).toBeVisible();
+    const requests = [];
+    await page.route('https://admin.example/**/draft', route => {
+        requests.push(route.request().postDataJSON()); return route.fulfill({status:409,json:{message:'Draft changed'}});
+    });
+    page.once('dialog', d => d.dismiss()); await page.locator('#delete-draft').click(); expect(requests).toEqual([]);
+    page.once('dialog', d => { expect(d.message()).toContain('2026'); expect(d.message()).toContain('2'); return d.accept(); });
+    await page.locator('#delete-draft').click(); await expect(page.locator('#status')).toContainText('Draft changed');
+    expect(requests[0].etag).toBe('original');
+    await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Bob');
+    expect(await page.evaluate(() => Object.keys(localStorage).some(k => k.startsWith('pbj.draft.') && !k.endsWith('.selection')))).toBe(true);
+});
+
+for (const published of [false,true]) {
+    test(`successful deletion reloads ${published ? 'published picks' : 'empty schedule'} and clears recovery`, async ({page}) => {
+        await page.clock.install();
+        await authenticated(page,{etag:'original',published,rows:[['Private','SEA','30']]});
+        if (published) { page.once('dialog',d => d.accept()); await page.locator('#edit-published').click(); }
+        await page.getByLabel('Player 1 NAME',{exact:true}).fill('Unsaved');
+        await page.route('https://admin.example/weeks/2026/2', route => route.fulfill({json:{
+            headers:['NAME','NE SEA','TIEBREAKER'],games:[{id:'game',away:'NE',home:'SEA'}],
+            rows:published ? [['Public','SEA','42']] : [],etag:null,source:published ? 'published' : 'empty',published,issues:[],
+        }}));
+        const deletes = [];
+        await page.route('https://admin.example/**/draft', route => {
+            expect(route.request().method()).toBe('DELETE'); deletes.push(route.request().postDataJSON());
+            return route.fulfill({json:{message:'Private draft deleted'}});
+        });
+        page.once('dialog',d => d.accept()); await page.locator('#delete-draft').click();
+        await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue(published ? 'Public' : '');
+        await expect(page.locator('#delete-draft')).toBeHidden(); await expect(page.locator('#revert')).toBeHidden();
+        await expect(page.locator('#published-warning'))[published ? 'toBeVisible' : 'toBeHidden']();
+        await page.clock.runFor(6000); expect(deletes).toEqual([{etag:'original'}]);
+        expect(await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('pbj.draft.') && !k.endsWith('.selection')))).toEqual([]);
+    });
+}
+test('reopen uses the saved draft and preserves work when that draft disappears', async ({page}) => {
+    await page.clock.install();
+    await authenticated(page,{etag:'original',rows:[['Original','SEA','30']]});
+    await page.getByLabel('Player 1 NAME',{exact:true}).fill('Local');
+    page.once('dialog',d => d.dismiss()); await page.locator('#reopen').click();
+    await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Local');
+    const recoveryBefore = await page.evaluate(() => Object.entries(localStorage).find(([k]) => k.startsWith('pbj.draft.') && !k.endsWith('.selection'))[1]);
+    await page.route('https://admin.example/weeks/2026/2', route => route.fulfill({status:502,json:{message:'Fetch failed'}}));
+    page.once('dialog',d => d.accept()); await page.locator('#reopen').click();
+    await expect(page.locator('#status')).toContainText('Fetch failed');
+    expect(await page.evaluate(() => Object.entries(localStorage).find(([k]) => k.startsWith('pbj.draft.') && !k.endsWith('.selection'))[1])).toBe(recoveryBefore);
+    await page.route('https://admin.example/weeks/2026/2', route => route.fulfill({json:{
+        source:'published',published:true,etag:null,rows:[['Public','SEA','42']],
+    }}));
+    page.once('dialog',d => d.accept()); await page.locator('#reopen').click();
+    await expect(page.locator('#status')).toContainText('saved draft no longer exists');
+    await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Local');
+    await page.route('https://admin.example/weeks/2026/2', route => route.fulfill({json:{
+        source:'draft',published:false,etag:'latest',rows:[['Shared','NE','35']],
+        headers:['NAME','NE SEA','TIEBREAKER'],games:[{id:'game',away:'NE',home:'SEA'}],issues:[],
+    }}));
+    page.once('dialog',d => d.accept()); await page.locator('#reopen').click();
+    await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Shared');
+    await expect(page.locator('#revert')).toBeHidden();
+    await expect(page.locator('#recovery')).toBeHidden();
+    expect(await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('pbj.draft.') && !k.endsWith('.selection')))).toEqual([]);
+});
+for (const failure of [409,502]) {
+    test(`revert persistence failure ${failure} retains table and device recovery`, async ({page}) => {
+        await page.clock.install();
+        await authenticated(page,{etag:'original',rows:[['Original','SEA','30']]});
+        await page.getByLabel('Player 1 NAME',{exact:true}).fill('Saved edit');
+        await page.clock.runFor(3100); await expect(page.locator('#save')).toBeDisabled();
+        await page.route('https://admin.example/**/draft', route => route.fulfill({status:failure,json:{message:'Reconciliation failed'}}));
+        page.once('dialog',d => d.accept()); await page.locator('#revert').click();
+        await expect(page.locator('#status')).toContainText('Reconciliation failed');
+        await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Saved edit');
+        await expect(page.locator('#revert')).toBeVisible(); await expect(page.locator('#save')).toBeDisabled();
+        expect(await page.evaluate(() => JSON.parse(Object.entries(localStorage).find(([k]) => k.startsWith('pbj.draft.') && !k.endsWith('.selection'))[1]).table.rows[0][0])).toBe('Saved edit');
+    });
+}
+test('revert suspends autosave while a pending write settles', async ({page}) => {
+    await page.clock.install(); await authenticated(page);
+    let finish; const gate = new Promise(resolve => { finish = resolve; }); const methods = [];
+    await page.route('https://admin.example/**/draft', async route => {
+        methods.push(route.request().method());
+        if (route.request().method() === 'PUT') await gate;
+        return route.fulfill({json:{etag:'saved',issues:[]}});
+    });
+    await page.getByLabel('Player 1 NAME',{exact:true}).fill('Pending');
+    await page.clock.runFor(3100); await expect.poll(() => methods.length).toBe(1);
+    const reverting = page.locator('#revert').click();
+    await expect(page.locator('#file')).toBeDisabled();
+    page.once('dialog',d => d.accept()); finish(); await reverting;
+    await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('');
+    await expect(page.locator('#revert')).toBeHidden(); await page.clock.runFor(6000);
+    expect(methods).toEqual(['PUT','DELETE']);
+});
+
+test('successful deletion followed by reload failure hides the stale editor and directs a refresh', async ({page}) => {
+    await page.clock.install(); await authenticated(page,{etag:'original'});
+    await page.getByLabel('Player 1 NAME',{exact:true}).fill('Local');
+    await page.route('https://admin.example/weeks/2026/2', route => route.fulfill({status:502,json:{message:'Reload unavailable'}}));
+    const methods = [];
+    await page.route('https://admin.example/**/draft', route => {
+        methods.push(route.request().method()); return route.fulfill({json:{message:'Deleted'}});
+    });
+    page.once('dialog',d => d.accept()); await page.locator('#delete-draft').click();
+    await expect(page.locator('#status')).toHaveText('Draft deleted, but the week could not be reloaded. Refresh the portal to continue.');
+    await expect(page.locator('#editor')).toBeHidden();
+    for (const selector of ['#picks input','#empty','#headers','#file','#validate','#save','#submit','#revert','#delete-draft','#reopen','#season','#week']) {
+        for (const control of await page.locator(selector).all()) await expect(control).toBeHidden();
+    }
+    await page.clock.runFor(6000); expect(methods).toEqual(['DELETE']);
+});
+
+for (const etag of [null,'original']) {
+    test(`manual return to original values still offers persisted revert (${etag})`, async ({page}) => {
+        await page.clock.install();
+        await authenticated(page,{etag,rows:[['Original','SEA','30']]});
+        const name = page.getByLabel('Player 1 NAME',{exact:true});
+        await name.fill('Saved edit'); await page.clock.runFor(3100);
+        await expect(page.locator('#save')).toBeDisabled();
+        await name.fill('Original'); await expect(page.locator('#revert')).toBeVisible();
+        const writes = [];
+        await page.route('https://admin.example/**/draft', route => {
+            writes.push({method:route.request().method(),body:route.request().postDataJSON()});
+            return route.fulfill({json:{etag:'restored',issues:[]}});
+        });
+        page.once('dialog',d => d.accept()); await page.locator('#revert').click();
+        await expect(page.locator('#revert')).toBeHidden();
+        expect(writes[0].method).toBe(etag ? 'PUT' : 'DELETE'); expect(writes[0].body.etag).toBe('saved');
+        await page.clock.runFor(6000); expect(writes).toHaveLength(1);
+    });
+}
+for (const serverEtag of [null,'unconfirmed']) {
+    test(`uncertain initial save can recover with server draft ${serverEtag}`, async ({page}) => {
+        await page.clock.install(); await authenticated(page);
+        await page.getByLabel('Player 1 NAME',{exact:true}).fill('Recover me');
+        await page.route('https://admin.example/**/draft', route => {
+            expect(route.request().method()).toBe('PUT'); return route.fulfill({status:502,json:{message:'Save outcome unknown'}});
+        });
+        await page.locator('#save').click(); await expect(page.locator('#status')).toContainText('Save outcome unknown');
+        await page.route('https://admin.example/weeks/2026/2', route => route.fulfill({json:{
+            etag:serverEtag,source:serverEtag ? 'draft' : 'empty',published:false,
+            headers:['NAME','NE SEA','TIEBREAKER'],rows:serverEtag ? [['Shared','SEA','35']] : [],
+            games:[{id:'game',away:'NE',home:'SEA'}],issues:[],
+        }}));
+        page.once('dialog',d => d.accept()); await page.locator('#revert').click();
+        if (serverEtag) {
+            await expect(page.locator('#status')).toContainText('Reopen Saved Draft');
+            await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Recover me');
+            await expect(page.locator('#reopen')).toBeVisible();
+            expect(await page.evaluate(() => Object.keys(localStorage).some(k => k.startsWith('pbj.draft.') && !k.endsWith('.selection')))).toBe(true);
+            page.once('dialog',d => d.dismiss()); await page.locator('#reopen').click();
+            await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Recover me');
+            page.once('dialog',d => d.accept()); await page.locator('#reopen').click();
+            await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('Shared');
+        } else {
+            await expect(page.getByLabel('Player 1 NAME',{exact:true})).toHaveValue('');
+            await expect(page.locator('#revert')).toBeHidden();
+            await page.getByLabel('Player 1 NAME',{exact:true}).fill('Retry'); await expect(page.locator('#save')).toBeEnabled();
+        }
+        await expect(page.locator('#recovery')).toBeHidden();
+    });
+}
+
+for (const etag of [null,'original']) {
+    test(`return to baseline before autosave leaves the server draft untouched (${etag})`, async ({page}) => {
+        await page.clock.install();
+        await authenticated(page,{etag,published:true,rows:[['Original','SEA','30']]});
+        page.once('dialog',d => d.accept()); await page.locator('#edit-published').click();
+        const writes = [];
+        page.on('request',r => { if (r.url().endsWith('/draft')) writes.push(r.method()); });
+        const name = page.getByLabel('Player 1 NAME',{exact:true});
+        await name.fill('Temporary'); await expect(page.locator('#save')).toBeEnabled();
+        await name.fill('Original'); await expect(page.locator('#save')).toBeDisabled();
+        await expect(page.locator('#revert')).toBeHidden();
+        await page.clock.runFor(6000); expect(writes).toEqual([]);
+        await expect(page.locator('#delete-draft'))[etag ? 'toBeVisible' : 'toBeHidden']();
+        expect(await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('pbj.draft.') && !k.endsWith('.selection')))).toEqual([]);
+    });
+}
+for (const status of [409,502]) {
+    test(`failed draft deletion ${status} never resumes automatic persistence`, async ({page}) => {
+        await page.clock.install();
+        await authenticated(page,{etag:'original',rows:[['Original','SEA','30']]});
+        const name = page.getByLabel('Player 1 NAME',{exact:true}); await name.fill('Keep me');
+        const methods = [];
+        await page.route('https://admin.example/**/draft', route => {
+            methods.push(route.request().method());
+            return route.fulfill({status,json:{message:'Deletion failed'}});
+        });
+        page.once('dialog',d => d.accept()); await page.locator('#delete-draft').click();
+        await expect(page.locator('#status')).toContainText('Deletion failed');
+        await page.clock.runFor(6000); expect(methods).toEqual(['DELETE']);
+        await expect(name).toHaveValue('Keep me'); await expect(page.locator('#save')).toBeDisabled();
+        await expect(page.locator('#reopen')).toBeVisible();
+        expect(await page.evaluate(() => JSON.parse(Object.entries(localStorage).find(([k]) => k.startsWith('pbj.draft.') && !k.endsWith('.selection'))[1]).table.rows[0][0])).toBe('Keep me');
+        await name.fill('Still recoverable'); await page.clock.runFor(6000); expect(methods).toEqual(['DELETE']);
+    });
+}

@@ -500,8 +500,9 @@ open editors retain their own in-memory contents. Use separate weeks or browser
 profiles when keeping independent unsaved versions.
 
 Deploy the updated admin Lambda before the updated static portal, through the
-existing deployment workflow. No new endpoint, service, IAM permission, or
-Terraform change is required. The static build copies PBJ artwork to
+existing deployment workflow, including the draft DELETE route and draft-only S3
+deletion permission. See [commissioner draft behavior](aws/README.md#commissioner-portal-local-implementation-review-before-deployment).
+The static build copies PBJ artwork to
 `build/site/assets/img/`, and the existing preview uploader includes PNG assets.
 Tests verify the intended logo's bytes in the artifact, its inclusion in upload
 selection, and its actual browser decoding. No live upload is needed to test it.

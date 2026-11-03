@@ -187,10 +187,25 @@ Private CSV paths in `pbj-data-jm26`:
 - Submitted importer input: `incoming/<season>/weekNN.csv`.
 - Published processor output: `data/<season>/weekNN.json`.
 
-Saving never invokes the processor. Draft ETags implement optimistic concurrency;
-a 409 requires reopening the saved draft before another save. Drafts reopen as
-editable CSV, including aliases and N/P values. Empty tables get schedule headers
-with no initial players. Defaults reuse the earliest unfinished week selection,
+Opening a week prefers the private draft, then published picks, then an empty
+schedule-derived table. Published weeks open read-only even when a draft exists.
+Editing requires acknowledgement; the warning remains visible, and resubmission
+requires a separate confirmation enforced by both the portal and API.
+
+Private saves never publish picks. ETags prevent overwriting another session's
+changes. Delete Draft removes only the private draft and reloads published picks
+or the empty schedule; missing drafts and stale versions are errors. Submitted
+inputs and published JSON remain untouched.
+
+Revert Changes restores the table originally loaded for this session, including
+reconciling autosaved edits. Failed or uncertain writes preserve recoverable work.
+An unconfirmed initial save is checked against the server before reverting; a
+draft found there must be explicitly reopened rather than assumed safe to delete.
+Reopen Saved Draft loads the current shared draft. Confirming discard clears the
+obsolete device copy only after the fetch succeeds, without a second recovery
+decision. Drafts retain aliases and N/P values.
+
+Defaults reuse the earliest unfinished week selection,
 falling back to the latest available schedule. Explicit unavailable weeks return
 404 without substitution. The newest available season is the initial season.
 CSV requests are limited to 250 KB in the browser and 500 KB at the API envelope.

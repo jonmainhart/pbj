@@ -133,7 +133,14 @@ def test_submit_reports_actual_processor_result(monkeypatch):
         "Payload": BytesIO(b'{"status":"ok","written":["data/2026/week01.json"]}')
     }
     result = admin.lambda_handler(
-        event("/weeks/2026/1/submit", "POST", csv=valid_csv(), confirm=True), None
+        event(
+            "/weeks/2026/1/submit",
+            "POST",
+            csv=valid_csv(),
+            confirm=True,
+            acknowledge_published=True,
+        ),
+        None,
     )
     assert result["statusCode"] == 200
     assert json.loads(result["body"])["result"]["written"] == ["data/2026/week01.json"]
@@ -148,7 +155,14 @@ def test_processor_failure_retains_pending_input_and_draft(monkeypatch):
     monkeypatch.setattr(boto3, "client", lambda service, **kwargs: processor)
     processor.invoke.return_value = {"FunctionError": "Unhandled", "Payload": BytesIO(b"{}")}
     result = admin.lambda_handler(
-        event("/weeks/2026/1/submit", "POST", csv=valid_csv(), confirm=True), None
+        event(
+            "/weeks/2026/1/submit",
+            "POST",
+            csv=valid_csv(),
+            confirm=True,
+            acknowledge_published=True,
+        ),
+        None,
     )
     assert result["statusCode"] == 502
     assert client.put_object.call_args.kwargs["Metadata"]["state"] == "pending"
@@ -190,7 +204,14 @@ def test_pending_submission_cannot_be_replaced(monkeypatch):
     monkeypatch.setattr(storage, "read", read)
     client.head_object.return_value = {"Metadata": {"state": "pending"}}
     result = admin.lambda_handler(
-        event("/weeks/2026/1/submit", "POST", csv=valid_csv(), confirm=True), None
+        event(
+            "/weeks/2026/1/submit",
+            "POST",
+            csv=valid_csv(),
+            confirm=True,
+            acknowledge_published=True,
+        ),
+        None,
     )
     assert result["statusCode"] == 409
     assert all("/drafts/" in call.kwargs["Key"] for call in client.put_object.call_args_list)
@@ -482,3 +503,94 @@ def test_existing_fixture_players_follow_reordered_schedule(monkeypatch):
         (p["name"], p["picks"], p["tiebreaker"]) for p in raw["players"]
     ]
     client.put_object.assert_not_called()
+
+
+def test_week_source_and_publication_are_independent(monkeypatch):
+    cases: list[tuple[Any, storage.Snapshot | None, str, bool]] = [
+        ([], None, "empty", False),
+        (None, None, "published", True),
+        (None, storage.Snapshot(b"", "draft"), "draft", True),
+        ([], storage.Snapshot(b"", "draft"), "draft", False),
+    ]
+    for players, draft, source, published in cases:
+        published_week(monkeypatch, players=players, draft=draft)
+        body = json.loads(admin.lambda_handler(event(), None)["body"])
+        assert body["source"] == source
+        assert body["published"] is published
+
+
+def test_published_submission_requires_separate_acknowledgement(monkeypatch):
+    client, _, _ = published_week(monkeypatch)
+    for acknowledgement in [None, False, "true"]:
+        result = admin.lambda_handler(
+            event(
+                "/weeks/2026/1/submit",
+                "POST",
+                csv=valid_csv(),
+                confirm=True,
+                acknowledge_published=acknowledgement,
+                published=False,
+            ),
+            None,
+        )
+        assert result["statusCode"] == 422
+    client.put_object.assert_not_called()
+    processor = MagicMock()
+    monkeypatch.setattr(boto3, "client", lambda *a, **kw: processor)
+    processor.invoke.return_value = {"Payload": BytesIO(b'{"status":"ok"}')}
+    assert (
+        admin.lambda_handler(
+            event(
+                "/weeks/2026/1/submit",
+                "POST",
+                csv=valid_csv(),
+                confirm=True,
+                acknowledge_published=True,
+            ),
+            None,
+        )["statusCode"]
+        == 200
+    )
+
+
+def test_delete_requires_existing_exact_version_and_only_deletes_draft(monkeypatch):
+    client, _, _ = published_week(monkeypatch, draft=storage.Snapshot(b"", "draft"))
+    for etag, expected in [(None, 400), ("*", 400), ("stale", 409), ("draft", 200)]:
+        result = admin.lambda_handler(event("/weeks/2026/1/draft", "DELETE", etag=etag), None)
+        assert result["statusCode"] == expected
+    client.delete_object.assert_called_once_with(
+        Bucket="private", Key="incoming/2026/drafts/week01.csv", IfMatch="draft"
+    )
+    client.put_object.assert_not_called()
+    client, _, _ = published_week(monkeypatch)
+    assert (
+        admin.lambda_handler(event("/weeks/2026/1/draft", "DELETE", etag="draft"), None)[
+            "statusCode"
+        ]
+        == 404
+    )
+    client.delete_object.assert_not_called()
+
+
+def test_delete_race_and_failure_are_not_success(monkeypatch):
+    for code, status in [("PreconditionFailed", 409), ("AccessDenied", 502)]:
+        client, _, _ = published_week(monkeypatch, draft=storage.Snapshot(b"", "draft"))
+        client.delete_object.side_effect = ClientError({"Error": {"Code": code}}, "DeleteObject")
+        assert (
+            admin.lambda_handler(event("/weeks/2026/1/draft", "DELETE", etag="draft"), None)[
+                "statusCode"
+            ]
+            == status
+        )
+
+
+def test_delete_infrastructure_is_draft_scoped():
+    config = Path("aws/terraform/admin.tf").read_text()
+    statements = [line for line in config.splitlines() if 'Action = "s3:DeleteObject"' in line]
+    assert len(statements) == 1
+    assert (
+        'Resource = "arn:aws:s3:::${local.data_bucket}/incoming/????/drafts/week??.csv"'
+        in statements[0]
+    )
+    assert '"DELETE /weeks/{season}/{week}/draft"' in config
+    assert '"DELETE"' in config

@@ -126,6 +126,7 @@ def dispatch(event: dict[str, Any]) -> dict[str, Any]:
     if not games:
         return response(404, {"message": "Selected week has no schedule"})
     key = f"incoming/{season}/drafts/week{week:02d}.csv"
+    published = bool(json.loads(schedule.content).get("players", []))
     if method == "GET" and action is None:
         draft = read_private_csv(s3, config, key)
         text = (
@@ -137,6 +138,8 @@ def dispatch(event: dict[str, Any]) -> dict[str, Any]:
             200,
             {
                 **inspect_csv(text, games),
+                "source": "draft" if draft is not None else "published" if published else "empty",
+                "published": published,
                 "etag": draft.etag if draft is not None else None,
                 "games": [
                     dict(id=g.id, away=g.away.abbreviation, home=g.home.abbreviation) for g in games
@@ -149,6 +152,30 @@ def dispatch(event: dict[str, Any]) -> dict[str, Any]:
     if len(body_text) > 500_000:
         return response(413, {"message": "CSV request exceeds 500 KB"})
     body = json.loads(body_text)
+    etag = body.get("etag")
+    if etag is not None and (not isinstance(etag, str) or not etag or "*" in etag):
+        raise ValueError("Invalid draft version")
+    if method == "DELETE" and action == "draft":
+        if etag is None:
+            raise ValueError("Draft version required for deletion")
+        draft = read_private_csv(s3, config, key)
+        if draft is None:
+            return response(404, {"message": "No saved draft exists"})
+        if draft.etag != etag:
+            return response(
+                409, {"message": "Draft changed in another session. Reopen before deleting."}
+            )
+        s3.delete_object(Bucket=config.bucket, Key=key, IfMatch=etag)
+        return response(200, {"message": "Private draft deleted"})
+    if (
+        method == "POST"
+        and action == "submit"
+        and published
+        and body.get("acknowledge_published") is not True
+    ):
+        return response(
+            422, {"message": "Acknowledge that resubmission may alter published results"}
+        )
     text = body.get("csv")
     if not isinstance(text, str):
         raise ValueError("csv must be a string")
@@ -163,9 +190,6 @@ def dispatch(event: dict[str, Any]) -> dict[str, Any]:
         or any(i["severity"] == "error" for i in result["issues"])
     ):
         return response(422, {**result, "message": "Confirm submission and correct all errors"})
-    etag = body.get("etag")
-    if etag is not None and not isinstance(etag, str):
-        raise ValueError("Invalid draft version")
     # Drafts may contain errors: retain the exact editable CSV for correction.
     saved = s3.put_object(
         Bucket=config.bucket,

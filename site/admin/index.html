@@ -49,6 +49,10 @@
         class="text-pbj-warning text-sm"
       ></p>
       <section id="editor" hidden class="space-y-5 mt-6 min-w-0">
+        <div id="published-warning" hidden class="border border-pbj-border rounded-xl p-4 text-pbj-warning">
+          <p>Picks have already been published for this week. Resubmitting changes may alter participant-facing results.</p>
+          <button id="edit-published" hidden>Edit Published Picks</button>
+        </div>
         <div
           class="flex flex-wrap gap-4 items-end bg-pbj-surface rounded-2xl p-4 shadow-sm"
         >
@@ -56,7 +60,9 @@
           ><label>Week<select id="week"></select></label
           ><button id="empty">Start empty table</button
           ><button id="headers" hidden>Repair schedule headers</button
-          ><button id="reopen">Reopen saved draft</button>
+          ><button id="reopen" hidden>Reopen Saved Draft</button
+          ><button id="revert" hidden>Revert Changes</button
+          ><button id="delete-draft" hidden>Delete Draft</button>
         </div>
         <section
           id="recovery"

@@ -83,6 +83,7 @@ resource "aws_iam_role_policy" "admin" {
       },
       { Effect = "Allow", Action = "s3:GetObject", Resource = "arn:aws:s3:::${local.data_bucket}/data/*" },
       { Effect = "Allow", Action = ["s3:GetObject", "s3:PutObject"], Resource = ["arn:aws:s3:::${local.data_bucket}/incoming/????/drafts/week??.csv", "arn:aws:s3:::${local.data_bucket}/incoming/????/week??.csv"] },
+      { Effect = "Allow", Action = "s3:DeleteObject", Resource = "arn:aws:s3:::${local.data_bucket}/incoming/????/drafts/week??.csv" },
       { Effect = "Allow", Action = "lambda:InvokeFunction", Resource = aws_lambda_function.processor.arn }
     ]
   })
@@ -115,7 +116,7 @@ resource "aws_apigatewayv2_api" "admin" {
   protocol_type = "HTTP"
   cors_configuration {
     allow_origins = ["https://${aws_cloudfront_distribution.preview.domain_name}"]
-    allow_methods = ["GET", "POST", "PUT", "OPTIONS"]
+    allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     allow_headers = ["authorization", "content-type"]
     max_age       = 300
   }
@@ -138,7 +139,7 @@ resource "aws_apigatewayv2_integration" "admin" {
   timeout_milliseconds   = 30000
 }
 resource "aws_apigatewayv2_route" "admin" {
-  for_each             = toset(["GET /schedules", "GET /weeks/{season}/{week}", "POST /weeks/{season}/{week}/validate", "PUT /weeks/{season}/{week}/draft", "POST /weeks/{season}/{week}/submit"])
+  for_each             = toset(["GET /schedules", "GET /weeks/{season}/{week}", "POST /weeks/{season}/{week}/validate", "PUT /weeks/{season}/{week}/draft", "DELETE /weeks/{season}/{week}/draft", "POST /weeks/{season}/{week}/submit"])
   api_id               = aws_apigatewayv2_api.admin.id
   route_key            = each.value
   target               = "integrations/${aws_apigatewayv2_integration.admin.id}"

@@ -1,3 +1,4 @@
+import {toCSV} from './admin-model.js';
 /** Local copies are recovery only. The ETag-protected private draft is authoritative. */
 export function recoveryScope(config, user) {
     return 'pbj.draft.' + JSON.stringify([config.api, config.clientId, user]);
@@ -14,8 +15,11 @@ export function readRecovery(storage, key) {
     return value;
 }
 
-export function createDraft({key, storage, etag, write, notify, delay = 3000, schedule = setTimeout, cancel = clearTimeout}) {
-    let table, revision = 0, timer, pending, paused = false, blocked = false, disposed = false, localValue;
+export function createDraft({key, storage, etag, initial, read, write, erase, notify, delay = 3000, schedule = setTimeout, cancel = clearTimeout}) {
+    const baseline = structuredClone(initial), originalEtag = etag;
+    // A failed request may have reached S3; reconciliation must still be conditional.
+    let needsReconcile = false;
+    let table = structuredClone(initial), revision = 0, timer, pending, paused = false, blocked = false, disposed = false, localValue;
     let dirty = false, baseEtag = etag;
     function retain() {
         try {
@@ -27,6 +31,9 @@ export function createDraft({key, storage, etag, write, notify, delay = 3000, sc
     function remove() {
         try { if (storage.getItem(key) === localValue) storage.removeItem(key); }
         catch { notify('storage', 'Unable to clear the device recovery copy.'); }
+    }
+    function differsFromBaseline() {
+        return Boolean(baseline) && (Boolean(table.needsHeaderChoice) !== Boolean(baseline.needsHeaderChoice) || toCSV(table) !== toCSV(baseline));
     }
     function queue() {
         cancel(timer);
@@ -40,8 +47,10 @@ export function createDraft({key, storage, etag, write, notify, delay = 3000, sc
         const savedRevision = revision, snapshot = structuredClone(table);
         pending = (async () => {
             try {
+                needsReconcile = true;
                 const result = await Promise.resolve().then(() => write(snapshot, etag));
                 etag = result.etag; baseEtag = etag;
+                needsReconcile = originalEtag === null || !baseline || toCSV(snapshot) !== toCSV(baseline);
                 if (revision === savedRevision) { dirty = false; remove(); notify('saved', 'All changes saved'); }
                 else { retain(); notify('edited', 'Unsaved changes'); }
                 return result;
@@ -59,12 +68,64 @@ export function createDraft({key, storage, etag, write, notify, delay = 3000, sc
         notify('saving', 'Saving…');
         const result = await pending; queue(); return result;
     }
+    async function revert() {
+        paused = true; cancel(timer);
+        try {
+            if (pending) await pending;
+            if (needsReconcile && originalEtag === null && etag === null) {
+                const current = await read();
+                if (current.etag !== null) {
+                    // This read proves existence, not ownership of an unconfirmed write.
+                    etag = current.etag; blocked = true;
+                    throw new Error('A saved draft exists. Use Reopen Saved Draft to review it; your device copy is preserved.');
+                }
+                needsReconcile = false; blocked = false;
+            }
+            if (blocked) throw new Error('Use Reopen Saved Draft before reverting; your device copy is preserved.');
+            if (needsReconcile) {
+                if (originalEtag !== null) etag = (await write(structuredClone(baseline), etag)).etag;
+                else {
+                    await erase(etag); etag = null;
+                }
+            }
+            table = structuredClone(baseline); revision++; dirty = false; needsReconcile = false; baseEtag = etag;
+            remove(); notify('saved', 'All changes saved');
+            return structuredClone(baseline);
+        } catch (error) {
+            blocked = true; retain();
+            notify('error', etag === null ? 'Revert failed; your work is preserved. Retry Revert Changes to check the server.' : 'Revert failed; your work is preserved. Reopen before saving.');
+            throw error;
+        }
+    }
     return {
+        get changed() {
+            return needsReconcile || differsFromBaseline();
+        },
+        revert,
+        async delete() {
+            paused = true; blocked = true; cancel(timer);
+            try {
+                if (pending) await pending;
+                await erase(etag);
+                // Require a fresh session; a failed reload must not recreate the deleted draft.
+                etag = null;
+                notify('deleted');
+            } catch (error) {
+                retain(); notify('error', 'Draft deletion failed; your work is preserved. Reopen Saved Draft before saving.');
+                throw error;
+            }
+        },
         get etag() { return etag; },
         get dirty() { return dirty; },
         get blocked() { return blocked; },
         get pending() { return pending; },
-        edit(value) { table = structuredClone(value); revision++; dirty = true; notify('edited', blocked ? 'A newer draft exists — reopen and review before restoring.' : 'Unsaved changes'); retain(); queue(); },
+        edit(value) {
+            table = structuredClone(value); revision++;
+            dirty = !baseline || differsFromBaseline() || needsReconcile || Boolean(pending) || blocked || baseEtag !== etag;
+            if (!dirty) { cancel(timer); remove(); notify('saved', 'All changes saved'); return; }
+            notify('edited', blocked ? 'A newer draft exists — reopen and review before restoring.' : 'Unsaved changes');
+            retain(); queue();
+        },
         save,
         pause(value) { paused = value; cancel(timer); if (!value) queue(); },
         // Recovery never schedules a server write until the commissioner explicitly saves.

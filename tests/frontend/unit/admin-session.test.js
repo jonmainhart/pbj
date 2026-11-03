@@ -56,11 +56,11 @@ test('network and server failures never replay a submission; forbidden identity 
         if (failure === 403) await assert.rejects(session.request('/one'), SessionExpired);
     }
 });
-function draftHarness(write) {
+function draftHarness(write, options = {}) {
     const data = new Map(), events = [];
     const storage = {getItem:k => data.get(k) ?? null, setItem:(k,v) => data.set(k,v), removeItem:k => data.delete(k)};
     let callback;
-    const draft = createDraft({key:'draft',storage,etag:'base',write,notify:(...event) => events.push(event),schedule:fn => { callback = fn; },cancel:() => { callback = null; }});
+    const draft = createDraft({key:'draft',storage,etag:'base',write,...options,notify:(...event) => events.push(event),schedule:fn => { callback = fn; },cancel:() => { callback = null; }});
     return {draft, data, events, storage, tick:() => callback?.()};
 }
 const table = {headers:['NAME','NE SEA','TIEBREAKER'],rows:[['Alice','','']]};
@@ -166,4 +166,163 @@ test('clean saves do not write or announce persistence', async () => {
     const h = draftHarness(() => { throw Error('unexpected write'); });
     assert.equal(await h.draft.save(),undefined);
     assert.deepEqual(h.events,[]);
+});
+
+for (const etag of ['base', null]) {
+    test(`revert restores session baseline with original draft ${etag}`, async () => {
+        const data = new Map(), writes = [], deletes = [];
+        const storage = {getItem:k => data.get(k),setItem:(k,v) => data.set(k,v),removeItem:k => data.delete(k)};
+        const draft = createDraft({key:'key',storage,etag,initial:table,notify:() => {},
+            write:async (value, version) => { writes.push({value,version}); return {etag:'saved'}; },
+            erase:async version => { deletes.push(version); }});
+        const edited = {...table,rows:[['Bob','SEA','30']]};
+        assert.equal(draft.changed,false);
+        draft.edit(edited); assert.equal(draft.changed,true);
+        assert.deepEqual(await draft.revert(),table);
+        assert.equal(writes.length,0); assert.equal(deletes.length,0);
+        draft.edit(edited); await draft.save();
+        assert.equal(draft.dirty,false); assert.equal(draft.changed,true);
+        assert.deepEqual(await draft.revert(),table);
+        assert.equal(draft.changed,false); assert.equal(draft.dirty,false); assert.equal(data.size,0);
+        if (etag) { assert.equal(writes.length,2); assert.deepEqual(writes[1],{value:table,version:'saved'}); }
+        else { assert.deepEqual(deletes,['saved']); assert.equal(draft.etag,null); }
+        draft.dispose();
+    });
+}
+test('revert waits for pending writes and preserves recoverable work on conflicts', async () => {
+    const gate = deferred(), data = new Map(); let deleted;
+    const storage = {getItem:k => data.get(k),setItem:(k,v) => data.set(k,v),removeItem:k => data.delete(k)};
+    const draft = createDraft({key:'key',storage,etag:null,initial:table,notify:() => {},
+        write:async () => { await gate.promise; return {etag:'saved'}; },
+        erase:async etag => { deleted = etag; throw Object.assign(Error('conflict'),{status:409}); }});
+    const edited = {...table,rows:[['Bob','','']]}; draft.edit(edited);
+    const save = draft.save(), revert = draft.revert();
+    assert.equal(deleted,undefined); gate.resolve(); await save;
+    await assert.rejects(revert,/conflict/);
+    assert.equal(deleted,'saved'); assert.equal(draft.changed,true);
+    assert.deepEqual(readRecovery(storage,'key').table,edited); draft.dispose();
+});
+
+for (const serverEtag of [null, 'unconfirmed']) {
+    test(`uncertain initial save reads the server before reverting (${serverEtag})`, async () => {
+        const data = new Map(), deletes = []; let reads = 0;
+        const storage = {getItem:k => data.get(k),setItem:(k,v) => data.set(k,v),removeItem:k => data.delete(k)};
+        const draft = createDraft({key:'key',storage,etag:null,initial:table,notify:() => {},
+            read:async () => { reads++; return {etag:serverEtag}; },
+            write:async () => { throw Error('connection lost'); },erase:async etag => { deletes.push(etag); }});
+        const edited = {...table,rows:[['Uncertain','','']]}; draft.edit(edited);
+        await assert.rejects(draft.save(),/connection lost/);
+        if (serverEtag) {
+            await assert.rejects(draft.revert(),/Reopen Saved Draft/);
+            assert.equal(draft.etag,serverEtag); assert.equal(draft.blocked,true);
+            assert.deepEqual(readRecovery(storage,'key').table,edited);
+        } else {
+            assert.deepEqual(await draft.revert(),table);
+            assert.equal(draft.changed,false); assert.equal(draft.dirty,false); assert.equal(data.size,0);
+        }
+        assert.equal(reads,1); assert.deepEqual(deletes,[]); draft.dispose();
+    });
+}
+for (const etag of ['original',null]) {
+    test(`manual return to baseline retains revert until persistence is reconciled (${etag})`, async () => {
+        const h = draftHarness(async () => ({etag:'saved'}));
+        const deletes = [];
+        const draft = createDraft({key:'key',storage:h.storage,etag,initial:table,notify:() => {},
+            write:async () => ({etag:'saved'}),erase:async value => deletes.push(value)});
+        draft.edit({...table,rows:[['Changed','','']]}); await draft.save();
+        draft.edit(table); assert.equal(draft.changed,true);
+        await draft.revert(); assert.equal(draft.changed,false);
+        assert.deepEqual(deletes,etag ? [] : ['saved']); draft.dispose();
+    });
+}
+
+test('failed server check retains recovery and can be retried safely', async () => {
+    const data = new Map(); let reads = 0;
+    const storage = {getItem:k => data.get(k),setItem:(k,v) => data.set(k,v),removeItem:k => data.delete(k)};
+    const draft = createDraft({key:'key',storage,etag:null,initial:table,notify:() => {},
+        write:async () => { throw Error('save failed'); },
+        read:async () => { if (++reads === 1) throw Error('read failed'); return {etag:null}; },
+        erase:async () => { assert.fail('Unconfirmed writes cannot be deleted'); }});
+    const edited = {...table,rows:[['Recoverable','','']]}; draft.edit(edited);
+    await assert.rejects(draft.save(),/save failed/); await assert.rejects(draft.revert(),/read failed/);
+    assert.deepEqual(readRecovery(storage,'key').table,edited); assert.equal(draft.changed,true);
+    assert.deepEqual(await draft.revert(),table); assert.equal(draft.changed,false); draft.dispose();
+});
+test('a confirmed autosave of the original draft baseline finishes reconciliation', async () => {
+    const h = draftHarness(async () => ({etag:'saved'}));
+    const draft = createDraft({key:'key',storage:h.storage,etag:'original',initial:table,notify:() => {},
+        write:async () => ({etag:'saved'})});
+    draft.edit({...table,rows:[['Edited','','']]}); await draft.save();
+    draft.edit(table); assert.equal(draft.changed,true); await draft.save();
+    assert.equal(draft.changed,false); draft.dispose();
+});
+
+test('a deleted existing draft cannot be treated as an uncertain initial save', async () => {
+    const h = draftHarness(async () => ({etag:'saved'}));
+    const draft = createDraft({key:'key',storage:h.storage,etag:'original',initial:table,notify:() => {},
+        read:async () => { assert.fail('Deletion must require a new session'); },
+        write:async () => ({etag:'saved'}),erase:async () => {}});
+    draft.edit({...table,rows:[['Edited','','']]}); await draft.save(); await draft.delete();
+    await assert.rejects(draft.revert(),/Reopen Saved Draft/);
+    assert.equal(draft.blocked,true); draft.dispose();
+});
+
+for (const etag of [null,'base']) {
+    test(`returning to the untouched baseline cancels persistence (${etag})`, async () => {
+        let writes = 0;
+        const h = draftHarness(async () => { writes++; return {etag:'saved'}; },{etag,initial:table});
+        h.draft.edit({...table,rows:[['Temporary','','']]});
+        assert.equal(h.draft.dirty,true); assert.equal(h.data.size,1);
+        h.draft.edit(table);
+        assert.equal(h.draft.dirty,false); assert.equal(h.draft.changed,false); assert.equal(h.data.size,0);
+        h.tick(); await h.draft.save(); assert.equal(writes,0); assert.equal(h.draft.etag,etag);
+        h.draft.dispose();
+    });
+}
+for (const status of [409,502]) {
+    test(`failed deletion (${status}) blocks autosave after task cleanup and preserves recovery`, async () => {
+        let writes = 0;
+        const h = draftHarness(async () => { writes++; return {etag:'saved'}; },{initial:table,
+            erase:async etag => { assert.equal(etag,'base'); throw Object.assign(Error('delete failed'),{status}); }});
+        const edited = {...table,rows:[['Keep me','','']]}; h.draft.edit(edited);
+        await assert.rejects(h.draft.delete(),/delete failed/);
+        h.draft.pause(false); h.tick();
+        assert.equal(writes,0); assert.equal(h.draft.etag,'base'); assert.equal(h.draft.blocked,true);
+        assert.deepEqual(readRecovery(h.storage,'draft').table,edited);
+        await assert.rejects(h.draft.save(),/reopen/); assert.equal(writes,0);
+        h.draft.dispose();
+    });
+}
+test('returning to baseline while a write is pending still requires reconciliation', async () => {
+    const gate = deferred();
+    const h = draftHarness(async () => { await gate.promise; return {etag:'saved'}; },{initial:table});
+    h.draft.edit({...table,rows:[['Pending','','']]}); const save = h.draft.save();
+    h.draft.edit(table); h.draft.pause(true);
+    assert.equal(h.draft.dirty,true); assert.equal(h.draft.changed,true);
+    assert.deepEqual(readRecovery(h.storage,'draft').table,table);
+    gate.resolve(); await save;
+    assert.equal(h.draft.dirty,true); assert.equal(h.draft.changed,true); h.draft.dispose();
+});
+test('matching the baseline preserves recovered work with unresolved older provenance', () => {
+    const h = draftHarness(async () => ({etag:'saved'}),{initial:table});
+    h.draft.recover({table,etag:'older'}); h.draft.edit(table);
+    assert.equal(h.draft.dirty,true); assert.equal(readRecovery(h.storage,'draft').etag,'older');
+    h.draft.dispose();
+});
+
+test('returning to baseline after an uncertain write preserves reconciliation and recovery', async () => {
+    const h = draftHarness(async () => { throw Error('outcome unknown'); },{etag:null,initial:table});
+    h.draft.edit({...table,rows:[['Uncertain','','']]}); await assert.rejects(h.draft.save());
+    h.draft.edit(table);
+    assert.equal(h.draft.dirty,true); assert.equal(h.draft.changed,true);
+    assert.deepEqual(readRecovery(h.storage,'draft').table,table); h.draft.dispose();
+});
+test('failed deletion restores recovery after an in-flight save has cleared it', async () => {
+    const gate = deferred(), edited = {...table,rows:[['Pending','','']]};
+    const h = draftHarness(async () => { await gate.promise; return {etag:'saved'}; },{initial:table,
+        erase:async etag => { assert.equal(etag,'saved'); throw Error('delete failed'); }});
+    h.draft.edit(edited); const save = h.draft.save(), deletion = h.draft.delete();
+    gate.resolve(); await save; await assert.rejects(deletion,/delete failed/);
+    assert.deepEqual(readRecovery(h.storage,'draft').table,edited);
+    assert.equal(h.draft.blocked,true); h.draft.dispose();
 });
