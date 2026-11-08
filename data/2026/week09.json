@@ -101,8 +101,8 @@
         "name": "New Orleans Saints"
       },
       "status": "live",
-      "away_score": 6,
-      "home_score": 6
+      "away_score": 12,
+      "home_score": 9
     },
     {
       "id": "1392343",
@@ -118,7 +118,7 @@
         "name": "Philadelphia Eagles"
       },
       "status": "live",
-      "away_score": 13,
+      "away_score": 16,
       "home_score": 8
     },
     {
