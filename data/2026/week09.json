@@ -84,7 +84,7 @@
         "name": "Miami Dolphins"
       },
       "status": "live",
-      "away_score": 9,
+      "away_score": 16,
       "home_score": 6
     },
     {
@@ -102,7 +102,7 @@
       },
       "status": "live",
       "away_score": 6,
-      "home_score": 3
+      "home_score": 6
     },
     {
       "id": "1392343",
