@@ -67,7 +67,7 @@
         "name": "Kansas City Chiefs"
       },
       "status": "live",
-      "away_score": 0,
+      "away_score": 3,
       "home_score": 0
     },
     {
@@ -84,7 +84,7 @@
         "name": "Miami Dolphins"
       },
       "status": "live",
-      "away_score": 0,
+      "away_score": 3,
       "home_score": 0
     },
     {
@@ -102,7 +102,7 @@
       },
       "status": "live",
       "away_score": 0,
-      "home_score": 0
+      "home_score": 3
     },
     {
       "id": "1392343",
@@ -118,7 +118,7 @@
         "name": "Philadelphia Eagles"
       },
       "status": "live",
-      "away_score": 0,
+      "away_score": 3,
       "home_score": 0
     },
     {
@@ -152,7 +152,7 @@
         "name": "Carolina Panthers"
       },
       "status": "live",
-      "away_score": 0,
+      "away_score": 3,
       "home_score": 0
     },
     {
