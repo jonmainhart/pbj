@@ -51,7 +51,7 @@
       },
       "status": "live",
       "away_score": 20,
-      "home_score": 17
+      "home_score": 20
     },
     {
       "id": "1392340",
@@ -66,7 +66,7 @@
         "abbreviation": "KC",
         "name": "Kansas City Chiefs"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 12,
       "home_score": 35
     },
@@ -101,7 +101,7 @@
         "name": "New Orleans Saints"
       },
       "status": "live",
-      "away_score": 13,
+      "away_score": 16,
       "home_score": 16
     },
     {
@@ -168,9 +168,9 @@
         "abbreviation": "LAC",
         "name": "Los Angeles Chargers"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392347",
@@ -1418,7 +1418,7 @@
     "players": [
       {
         "player_id": "abigail",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1429,7 +1429,7 @@
       },
       {
         "player_id": "angie-mainhart",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1440,18 +1440,18 @@
       },
       {
         "player_id": "atrain",
-        "wins": 2,
+        "wins": 3,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.6666666666666666,
+        "accuracy": 0.75,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "beave",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1462,29 +1462,29 @@
       },
       {
         "player_id": "big-e",
-        "wins": 1,
+        "wins": 2,
         "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.3333333333333333,
+        "accuracy": 0.5,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "bigstrike",
-        "wins": 2,
+        "wins": 3,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.6666666666666666,
+        "accuracy": 0.75,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "bill-wonorski",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1495,7 +1495,7 @@
       },
       {
         "player_id": "broskeys",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1506,7 +1506,7 @@
       },
       {
         "player_id": "d-rell",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1517,29 +1517,29 @@
       },
       {
         "player_id": "deacon",
-        "wins": 2,
+        "wins": 3,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.6666666666666666,
+        "accuracy": 0.75,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "don-gammon",
-        "wins": 2,
+        "wins": 3,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.6666666666666666,
+        "accuracy": 0.75,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "edward-g",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1550,7 +1550,7 @@
       },
       {
         "player_id": "eli-street",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1561,7 +1561,7 @@
       },
       {
         "player_id": "heavy-d",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1572,7 +1572,7 @@
       },
       {
         "player_id": "hope",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1583,7 +1583,7 @@
       },
       {
         "player_id": "james-pbj",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1594,7 +1594,7 @@
       },
       {
         "player_id": "jeanette",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1605,40 +1605,40 @@
       },
       {
         "player_id": "jeff-kennedy",
-        "wins": 2,
+        "wins": 3,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.6666666666666666,
+        "accuracy": 0.75,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "jenny-d",
-        "wins": 1,
+        "wins": 2,
         "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.3333333333333333,
+        "accuracy": 0.5,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "jenny-d-husband",
-        "wins": 2,
+        "wins": 3,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.6666666666666666,
+        "accuracy": 0.75,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "john-b3",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1649,7 +1649,7 @@
       },
       {
         "player_id": "john-perry-jr",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1660,18 +1660,18 @@
       },
       {
         "player_id": "jozies",
-        "wins": 2,
+        "wins": 3,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.6666666666666666,
+        "accuracy": 0.75,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "julie-g",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1682,7 +1682,7 @@
       },
       {
         "player_id": "karlee",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1693,7 +1693,7 @@
       },
       {
         "player_id": "kass",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1704,7 +1704,7 @@
       },
       {
         "player_id": "kelly-b",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1715,7 +1715,7 @@
       },
       {
         "player_id": "keri",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1726,7 +1726,7 @@
       },
       {
         "player_id": "kolton",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1737,7 +1737,7 @@
       },
       {
         "player_id": "kramer",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1748,7 +1748,7 @@
       },
       {
         "player_id": "little-foot",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1759,7 +1759,7 @@
       },
       {
         "player_id": "liz-gammon",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1770,7 +1770,7 @@
       },
       {
         "player_id": "mac",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1781,7 +1781,7 @@
       },
       {
         "player_id": "mafia",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1792,7 +1792,7 @@
       },
       {
         "player_id": "matt-a",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1803,18 +1803,18 @@
       },
       {
         "player_id": "matt-s",
-        "wins": 2,
+        "wins": 3,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.6666666666666666,
+        "accuracy": 0.75,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "mr-angie",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1825,29 +1825,29 @@
       },
       {
         "player_id": "mrs-v",
-        "wins": 2,
+        "wins": 3,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.6666666666666666,
+        "accuracy": 0.75,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "nick-g",
-        "wins": 1,
+        "wins": 2,
         "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.3333333333333333,
+        "accuracy": 0.5,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "nick-s",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1858,7 +1858,7 @@
       },
       {
         "player_id": "nina-perry",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1869,7 +1869,7 @@
       },
       {
         "player_id": "richard",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1880,18 +1880,18 @@
       },
       {
         "player_id": "robert-h",
-        "wins": 2,
+        "wins": 3,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.6666666666666666,
+        "accuracy": 0.75,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "shauna-with-da-woo",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1902,7 +1902,7 @@
       },
       {
         "player_id": "shawna",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1913,29 +1913,29 @@
       },
       {
         "player_id": "shorty",
-        "wins": 2,
+        "wins": 3,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.6666666666666666,
+        "accuracy": 0.75,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "steff",
-        "wins": 1,
+        "wins": 2,
         "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.3333333333333333,
+        "accuracy": 0.5,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "talishious",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1946,7 +1946,7 @@
       },
       {
         "player_id": "tom-elwell",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
@@ -1957,7 +1957,7 @@
       },
       {
         "player_id": "tommy-shawnas-hubby",
-        "wins": 3,
+        "wins": 4,
         "losses": 0,
         "ties": 0,
         "missed_picks": 0,
