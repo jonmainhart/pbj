@@ -50,7 +50,7 @@
         "name": "Indianapolis Colts"
       },
       "status": "live",
-      "away_score": 20,
+      "away_score": 27,
       "home_score": 23
     },
     {
@@ -101,7 +101,7 @@
         "name": "New Orleans Saints"
       },
       "status": "live",
-      "away_score": 16,
+      "away_score": 22,
       "home_score": 23
     },
     {
@@ -185,9 +185,9 @@
         "abbreviation": "SF",
         "name": "San Francisco 49ers"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392348",
@@ -202,9 +202,9 @@
         "abbreviation": "NE",
         "name": "New England Patriots"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392349",
@@ -219,9 +219,9 @@
         "abbreviation": "SEA",
         "name": "Seattle Seahawks"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392350",
