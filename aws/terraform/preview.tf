@@ -36,6 +36,8 @@ resource "aws_cloudfront_distribution" "preview" {
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
 
+  aliases = ["www.pbjfootball.com", "pbjfootball.com"]
+
   origin {
     domain_name              = aws_s3_bucket.preview.bucket_regional_domain_name
     origin_id                = "static"
@@ -82,7 +84,11 @@ resource "aws_cloudfront_distribution" "preview" {
   restrictions {
     geo_restriction { restriction_type = "none" }
   }
-  viewer_certificate { cloudfront_default_certificate = true }
+  viewer_certificate {
+    acm_certificate_arn      = "arn:aws:acm:us-east-1:972224212140:certificate/8383854a-beb8-46b0-b339-62e1ebea1ad1"
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
   lifecycle { prevent_destroy = true }
 }
 

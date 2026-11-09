@@ -33,12 +33,20 @@ resource "aws_cognito_user_pool_client" "admin" {
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_scopes                 = ["openid", "pbj/admin"]
   supported_identity_providers         = ["COGNITO"]
-  callback_urls                        = ["https://${aws_cloudfront_distribution.preview.domain_name}/admin/"]
-  logout_urls                          = ["https://${aws_cloudfront_distribution.preview.domain_name}/admin/"]
-  prevent_user_existence_errors        = "ENABLED"
-  access_token_validity                = 30
-  id_token_validity                    = 30
-  refresh_token_validity               = 1
+  callback_urls = [
+    "https://${aws_cloudfront_distribution.preview.domain_name}/admin/",
+    "https://pbjfootball.com/admin/",
+    "https://www.pbjfootball.com/admin/",
+  ]
+  logout_urls = [
+    "https://${aws_cloudfront_distribution.preview.domain_name}/admin/",
+    "https://pbjfootball.com/admin/",
+    "https://www.pbjfootball.com/admin/",
+  ]
+  prevent_user_existence_errors = "ENABLED"
+  access_token_validity         = 30
+  id_token_validity             = 30
+  refresh_token_validity        = 1
   token_validity_units {
     access_token  = "minutes"
     id_token      = "minutes"
@@ -118,7 +126,11 @@ resource "aws_apigatewayv2_api" "admin" {
   name          = "pbj-admin"
   protocol_type = "HTTP"
   cors_configuration {
-    allow_origins = ["https://${aws_cloudfront_distribution.preview.domain_name}"]
+    allow_origins = [
+      "https://${aws_cloudfront_distribution.preview.domain_name}",
+      "https://pbjfootball.com",
+      "https://www.pbjfootball.com",
+    ]
     allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     allow_headers = ["authorization", "content-type"]
     max_age       = 300

@@ -822,6 +822,7 @@ try {
       "Portal configuration is not installed. See AWS setup instructions.",
     );
   config = await res.json();
+  config.redirectUri = `${location.origin}/admin/`;
   const tokens = await finishLogin(config);
   if (tokens) {
     session = createSession(config, tokens);

@@ -58,7 +58,11 @@ def test_origin_configuration_and_access_boundaries():
     assert "incoming/" not in config and "terraform/" not in config
     assert '"AWS:SourceArn"' in config
     assert "block_public_policy = true" in config
-    assert "cloudfront_default_certificate = true" in config
+    assert "cloudfront_default_certificate = true" not in config
+    assert 'aliases = ["www.pbjfootball.com", "pbjfootball.com"]' in config
+    assert "acm_certificate_arn =" in config
+    assert 'ssl_support_method = "sni-only"' in config
+    assert 'minimum_protocol_version = "TLSv1.2_2021"' in config
 
 
 def test_operational_policy_is_owned_directly_and_scoped_to_preview():
