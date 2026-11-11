@@ -41,7 +41,14 @@ def upload_site(client: UploadClient, artifact: Path) -> None:
             str(path),
             BUCKET,
             relative.as_posix(),
-            ExtraArgs={"ContentType": content_type, "CacheControl": "no-cache"},
+            ExtraArgs={
+                "ContentType": content_type,
+                "CacheControl": (
+                    "public, max-age=60, s-maxage=300"
+                    if relative.parts[0] == "assets"
+                    else "no-cache"
+                ),
+            },
         )
 
 

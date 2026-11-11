@@ -74,6 +74,8 @@ SCHEDULER_INPUT = '{"action":"create_week","scheduled_time":"<aws.scheduler.sche
         ('aws_apigatewayv2_route.admin["PUT /announcements"]', ["create"], True),
         ('aws_apigatewayv2_route.admin["DELETE /weeks/{season}/{week}"]', ["create"], False),
         ("aws_s3_object.picks", ["create"], False),
+        ("aws_cloudfront_cache_policy.assets", ["create"], False),
+        ("aws_cloudfront_distribution.other", ["update"], False),
         ("aws_iam_role.power_user", ["update"], False),
         ("aws_iam_role_policy.processor", ["delete"], False),
     ],

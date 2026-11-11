@@ -72,6 +72,33 @@ resource "aws_cloudfront_distribution" "preview" {
     response_headers_policy_id = aws_cloudfront_response_headers_policy.data.id
     compress                   = true
   }
+  # Exact exception must precede the generic assets behavior.
+  ordered_cache_behavior {
+    path_pattern           = "/assets/admin-config.json"
+    target_origin_id       = "static"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+    compress               = true
+  }
+  ordered_cache_behavior {
+    path_pattern           = "/assets/*"
+    target_origin_id       = "static"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = true
+    # CachingOptimized defaults to a day and permits a year. Inline TTLs enforce
+    # a five-minute ceiling without another policy resource or IAM permissions.
+    min_ttl     = 0
+    default_ttl = 300
+    max_ttl     = 300
+    forwarded_values {
+      query_string = false
+      cookies { forward = "none" }
+    }
+  }
   # Avoid caching missing rollover manifests/weeks (S3 has a minimum of 1 second).
   custom_error_response {
     error_code            = 403

@@ -16,6 +16,11 @@ def test_upload_only_public_static_files(tmp_path):
     artifact = tmp_path / "site"
     build_site(ROOT, artifact)
     (artifact / "private.csv").write_text("private")
+    (artifact / "assets/private.csv").write_text("private")
+    (artifact / "incoming").mkdir()
+    (artifact / "incoming/private.json").write_text("{}")
+    (artifact / "terraform").mkdir()
+    (artifact / "terraform/private.json").write_text("{}")
     (artifact / "data/announcements.json").write_text("{}")
     (artifact / "assets/admin-config.json").write_text("{}")
     (artifact / "BALLDONTLIE.key").write_text("secret")
@@ -35,11 +40,21 @@ def test_upload_only_public_static_files(tmp_path):
         "assets/documents/rules.html",
         "LEGAL.md",
     } <= keys
-    assert not any(key.startswith("data/") or key.endswith(".csv") for key in keys)
+    assert not any(
+        key.startswith(("data/", "incoming/", "terraform/")) or key.endswith(".csv") for key in keys
+    )
     assert not {"CNAME", "BALLDONTLIE.key", "private.csv", "assets/admin-config.json"} & keys
     assert "admin/index.html" in keys
     assert all(bucket == "pbj-preview-jm26" for bucket, _, _ in calls)
-    assert all(args["CacheControl"] == "no-cache" for _, _, args in calls)
+    for _, key, args in calls:
+        assert args["CacheControl"] == (
+            "public, max-age=60, s-maxage=300" if key.startswith("assets/") else "no-cache"
+        )
+    headers = {key: args for _, key, args in calls}
+    assert headers["index.html"]["ContentType"] == "text/html"
+    assert headers["assets/documents/rules.html"]["ContentType"] == "text/html"
+    assert headers["assets/img/logo-transparent-full.png"]["ContentType"] == "image/png"
+    assert headers["assets/app.js"]["ContentType"] in {"text/javascript", "application/javascript"}
     assert (artifact / "assets/img/logo-transparent-full.png").read_bytes() == (
         ROOT / "site/assets/img/logo-transparent-full.png"
     ).read_bytes()
@@ -50,7 +65,28 @@ def test_upload_only_public_static_files(tmp_path):
 def test_origin_configuration_and_access_boundaries():
     config = " ".join((ROOT / "aws/terraform/preview.tf").read_text().split())
     default = config.split("default_cache_behavior {", 1)[1].split("ordered_cache_behavior", 1)[0]
-    data = config.split("ordered_cache_behavior {", 1)[1].split("restrictions", 1)[0]
+    behaviors = config.split("ordered_cache_behavior {")[1:]
+    assert len(behaviors) == 3
+    data, admin_config, assets = behaviors
+    disabled = 'cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"'
+    assert disabled in default and disabled in data and disabled in admin_config
+    assert 'path_pattern = "/assets/admin-config.json"' in admin_config
+    assert 'target_origin_id = "static"' in admin_config
+    assert 'path_pattern = "/assets/*"' in assets
+    assert 'target_origin_id = "static"' in assets
+    assert "cache_policy_id" not in assets
+    assert "min_ttl = 0" in assets
+    assert "default_ttl = 300" in assets and "max_ttl = 300" in assets
+    assert "query_string = false" in assets and 'forward = "none"' in assets
+    for behavior in (default, data, admin_config, assets):
+        assert 'viewer_protocol_policy = "redirect-to-https"' in behavior
+        assert 'allowed_methods = ["GET", "HEAD"]' in behavior
+        assert 'cached_methods = ["GET", "HEAD"]' in behavior
+        assert "compress = true" in behavior
+    assert "response_headers_policy_id = aws_cloudfront_response_headers_policy.data.id" in data
+    assert 'value = "no-store"' in config
+    admin = (ROOT / "aws/terraform/admin.tf").read_text()
+    assert 'cache_control = "no-store"' in admin
     assert 'target_origin_id = "static"' in default
     assert 'target_origin_id = "data"' in data
     assert 'path_pattern = "/data/*"' in data
