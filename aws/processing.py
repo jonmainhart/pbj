@@ -20,6 +20,8 @@ from scripts import aggregate_season, generate_manifest, import_picks, score_wee
 if TYPE_CHECKING:
     from mypy_boto3_s3 import S3Client
 
+    from pbj.domain.game import Game
+
 WEEK_FILE = re.compile(r"(\d{4})/week(0[1-9]|1[0-8])\.json$")
 
 
@@ -197,6 +199,115 @@ def next_creation(s3: "S3Client", config: storage.StorageConfig) -> dict[str, ob
         return None
 
 
+# Provenance lives atomically on season.json, not in a separate tracking object.
+# Version the summary so changes to selection/aggregation can force reconciliation.
+POLL_SOURCES = "pbj-poll-sources-v1"
+
+
+def poll_games(s3: "S3Client", config: storage.StorageConfig, season: int) -> dict[str, object]:
+    season_prefix = config.key(str(season)) + "/"
+    listed = storage.list_etags(s3, config)
+    sources = {
+        Path(key).name: etag
+        for key, etag in listed.items()
+        if key.startswith(season_prefix) and WEEK_FILE.fullmatch(key.removeprefix(config.prefix))
+    }
+    season_key = config.key(f"{season}/season.json")
+    original = storage.read(s3, config, season_key)
+    try:
+        provenance = json.loads(original.metadata.get(POLL_SOURCES, "null")) if original else None
+    except ValueError:
+        provenance = None
+    # Only the selected week is needed; retain source identities rather than per-week flags.
+    week = provenance.get("week") if isinstance(provenance, dict) else None
+    selected = f"week{week:02d}.json" if type(week) is int else None
+    consistent = (
+        isinstance(provenance, dict)
+        and provenance == {"sources": sources, "week": week}
+        and all(sources.values())
+        and (week is None or (type(week) is int and selected in sources))
+    )
+    written: list[str] = []
+    fetched = scored = False
+    with TemporaryDirectory() as directory:
+        season_dir = Path(directory)
+        snapshots: dict[str, storage.Snapshot] = {}
+        games: dict[int, list[Game]] = {}
+
+        def retrieve(key: str) -> None:
+            snapshot = storage.read(s3, config, config.key(f"{season}/{key}"), required=True)
+            if snapshot is None:
+                raise RuntimeError(f"Source disappeared: {key}; retry")
+            snapshots[key] = snapshot
+            path = season_dir / key
+            path.write_bytes(snapshot.content)
+            games[int(path.stem[4:])] = load_games(path)
+
+        if consistent and selected is not None:
+            retrieve(selected)
+            consistent = snapshots[selected].etag == sources[selected]
+        if not consistent:
+            for key in sorted(sources):
+                if key not in snapshots:
+                    retrieve(key)
+            week = select_active_week(games)
+            selected = f"week{week:02d}.json" if week else None
+        if selected is not None and week is not None:
+            path = season_dir / selected
+            if should_poll(games[week], now()):
+                before = json.loads(snapshots[selected].content)
+                update_games.update_week(path, season, week, provider())
+                fetched = True
+                # Provider no-ops need neither scoring nor reconciliation.
+                updated = json.loads(path.read_bytes())
+                if before != updated or (before.get("players") and "results" not in before):
+                    if updated.get("players"):
+                        score_week.score_week_file(path, season, week)
+                        scored = True
+                    if storage.publish(
+                        s3,
+                        config,
+                        config.key(f"{season}/{selected}"),
+                        path.read_bytes(),
+                        snapshots[selected],
+                    ):
+                        written.append(config.key(f"{season}/{selected}"))
+                        consistent = False
+                        # Use the persisted version and its server ETag, including concurrent edits.
+                        retrieve(selected)
+        if not consistent:
+            for key in sorted(sources):
+                if key not in snapshots:
+                    retrieve(key)
+            aggregate_season.aggregate_season_files(season, season_dir)
+            provenance = {
+                "sources": {key: snapshot.etag for key, snapshot in snapshots.items()},
+                "week": select_active_week(games),
+            }
+            metadata = {POLL_SOURCES: json.dumps(provenance, separators=(",", ":"), sort_keys=True)}
+            # Arbitrary ETags can exceed S3's metadata limit; safely remain on the full path.
+            if len(POLL_SOURCES.encode()) + len(metadata[POLL_SOURCES].encode()) > 2048:
+                metadata = {}
+            if storage.publish(
+                s3,
+                config,
+                season_key,
+                (season_dir / "season.json").read_bytes(),
+                original,
+                metadata=metadata,
+            ):
+                written.append(season_key)
+    return dict(
+        status="ok",
+        action="poll_games",
+        season=season,
+        week=week,
+        fetched=fetched,
+        scored=scored,
+        written=written,
+    )
+
+
 def process(
     action: str,
     season: int,
@@ -220,6 +331,8 @@ def process(
             )
     config = storage.StorageConfig.from_environment()
     s3 = storage.client()
+    if action == "poll_games":
+        return poll_games(s3, config, season)
     manifest_original = None
     if action == "create_week" and (creation_token is not None or not publish_manifest):
         # Keep the exact manifest snapshot authorized by the token for the conditional write.
@@ -250,11 +363,11 @@ def process(
         snapshots: dict[str, storage.Snapshot] = {}
         # Manifest generation needs filenames, not historical season contents.
         for name in names:
-            if action in ("poll_games", "update_week") and not name.startswith(f"{season}/"):
+            if action == "update_week" and not name.startswith(f"{season}/"):
                 continue
             path = root / name
             path.parent.mkdir(exist_ok=True)
-            if action in ("poll_games", "update_week") and path.parent == season_dir:
+            if action == "update_week":
                 snapshot = storage.read(s3, config, config.key(name))
                 if snapshot is None:
                     raise RuntimeError(f"Source disappeared: {name}; retry")
@@ -300,14 +413,11 @@ def process(
             weeks = {
                 int(path.stem[4:]): load_games(path) for path in season_dir.glob("week??.json")
             }
-            if action == "update_week":
-                if week not in weeks:
-                    raise FileNotFoundError(f"{season}/week{week:02d}.json")
-            else:
-                week = select_active_week(weeks)
+            if week not in weeks:
+                raise FileNotFoundError(f"{season}/week{week:02d}.json")
             season_key = config.key(f"{season}/season.json")
             season_original = storage.read(s3, config, season_key)
-            if week is not None and (action == "update_week" or should_poll(weeks[week], now())):
+            if week is not None:
                 path = season_dir / f"week{week:02d}.json"
                 update_games.update_week(path, season, week, provider())
                 fetched = True

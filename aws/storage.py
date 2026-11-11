@@ -3,7 +3,7 @@
 import json
 import os
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
@@ -30,6 +30,7 @@ class StorageConfig:
 class Snapshot:
     content: bytes
     etag: str
+    metadata: dict[str, str] = field(default_factory=dict)
 
 
 def client() -> "S3Client":
@@ -40,14 +41,19 @@ def client() -> "S3Client":
 
 
 def list_keys(s3: "S3Client", storage: StorageConfig) -> list[str]:
-    return [
-        item["Key"]
+    return list(list_etags(s3, storage))
+
+
+def list_etags(s3: "S3Client", storage: StorageConfig) -> dict[str, str]:
+    """Retain authoritative source identities from the existing paginated listing."""
+    return {
+        item["Key"]: item.get("ETag", "")
         for page in s3.get_paginator("list_objects_v2").paginate(
             Bucket=storage.bucket, Prefix=storage.prefix
         )
         for item in page.get("Contents", [])
         if "Key" in item
-    ]
+    }
 
 
 def read(
@@ -66,7 +72,7 @@ def read(
     etag = response["ETag"]
     if not etag:
         raise ValueError("S3 response must include an ETag")
-    return Snapshot(content, etag)
+    return Snapshot(content, etag, response.get("Metadata", {}))
 
 
 def changed(content: bytes, original: Snapshot | None) -> bool:
@@ -74,9 +80,17 @@ def changed(content: bytes, original: Snapshot | None) -> bool:
 
 
 def publish(
-    s3: "S3Client", storage: StorageConfig, key: str, content: bytes, original: Snapshot | None
+    s3: "S3Client",
+    storage: StorageConfig,
+    key: str,
+    content: bytes,
+    original: Snapshot | None,
+    *,
+    metadata: dict[str, str] | None = None,
 ) -> bool:
-    if not changed(content, original):
+    if not changed(content, original) and (
+        metadata is None or (original is not None and metadata == original.metadata)
+    ):
         return False
     request: PutObjectRequestTypeDef = {
         "Bucket": storage.bucket,
@@ -84,6 +98,8 @@ def publish(
         "Body": content,
         "ContentType": "application/json",
     }
+    if metadata is not None:
+        request["Metadata"] = metadata
     if original is None:
         request["IfNoneMatch"] = "*"
     else:

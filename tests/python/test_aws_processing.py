@@ -24,6 +24,7 @@ class S3:
     def __init__(self):
         self.objects = {}
         self.writes = []
+        self.metadata = {}
         self.fail = None
 
     def get_paginator(self, name):
@@ -34,7 +35,13 @@ class S3:
         assert kwargs["Bucket"] == "pbj-data-jm26"
         self.listed_prefix = kwargs["Prefix"]
         return [
-            {"Contents": [{"Key": key} for key in self.objects if key.startswith(kwargs["Prefix"])]}
+            {
+                "Contents": [
+                    {"Key": key, "ETag": self.etag(self.objects[key])}
+                    for key in self.objects
+                    if key.startswith(kwargs["Prefix"])
+                ]
+            }
         ]
 
     def get_object(self, Bucket, Key):
@@ -42,7 +49,11 @@ class S3:
         if Key not in self.objects:
             raise error("NoSuchKey")
         content = self.objects[Key]
-        return {"Body": io.BytesIO(content), "ETag": self.etag(content)}
+        return {
+            "Body": io.BytesIO(content),
+            "ETag": self.etag(content),
+            "Metadata": self.metadata.get(Key, {}),
+        }
 
     @staticmethod
     def etag(content):
@@ -59,10 +70,12 @@ class S3:
             assert kwargs["IfNoneMatch"] == "*"
             if key in self.objects:
                 raise error("PreconditionFailed")
+        self.metadata[key] = kwargs.get("Metadata", {})
         self.objects[key] = kwargs["Body"]
         self.writes.append(key)
 
     def seed(self, key, value):
+        self.metadata.pop(key, None)
         self.objects[key] = json.dumps(value).encode()
 
     def data(self, key):
@@ -975,9 +988,9 @@ def test_invalid_portal_publication_event_never_calls_aws(setup, monkeypatch, ev
 @pytest.mark.parametrize(
     ("scenario", "gets", "puts", "aggregations"),
     [
-        ("idle", 7, 0, 1),
-        ("completed", 7, 0, 1),
-        ("live", 7, 2, 1),
+        ("idle", 7, 1, 1),
+        ("completed", 7, 1, 1),
+        ("live", 8, 2, 1),
         ("correction", 8, 2, 1),
         ("recovery", 7, 1, 1),
         ("creation", 1, 2, 0),
@@ -1039,6 +1052,157 @@ def test_processing_operation_budget(
         call.kwargs["Key"].endswith(".json") and "/week" in call.kwargs["Key"]
         for call in reading.call_args_list
     )
-    assert week_reads == (0 if scenario in ("creation", "delayed") else 6)
+    assert week_reads == (
+        0 if scenario in ("creation", "delayed") else 7 if scenario == "live" else 6
+    )
     if scenario == "recovery":
         assert s3.data(SEASON_KEY)["weeks_scored"] == list(range(1, 7))
+
+
+@pytest.mark.parametrize(
+    ("count", "state"),
+    [
+        (2, "scheduled"),
+        (9, "scheduled"),
+        (18, "scheduled"),
+        (18, "completed"),
+        (18, "live"),
+        (18, "empty"),
+    ],
+)
+def test_warm_poll_budget_and_equivalence(setup, monkeypatch, tmp_path, count, state):
+    from pbj.active_week import select_active_week
+    from scripts import aggregate_season, score_week
+
+    s3, provider = setup
+    weeks = {}
+    for week in range(1, count + 1):
+        data = {**weekly(), "week": week}
+        if week == count:
+            if state == "empty":
+                data["games"] = []
+                data.pop("players", None)
+            elif state != "completed":
+                data["games"][0]["status"] = state
+                data["games"][0]["scheduled_time"] = "2026-10-25T17:00:00+00:00"
+        path = tmp_path / f"week{week:02d}.json"
+        path.write_text(json.dumps(data))
+        if data.get("players"):
+            score_week.score_week_file(path, 2026, week)
+        s3.objects[f"data/2026/{path.name}"] = path.read_bytes()
+        weeks[week] = load_games(path)
+    aggregate_season.aggregate_season_files(2026, tmp_path)
+    expected = json.loads((tmp_path / "season.json").read_bytes())
+    if state == "live":
+        provider.get_week.return_value = weeks[count]
+    reading = Mock(wraps=s3.get_object)
+    aggregation = Mock(wraps=aggregate_season.aggregate_season_files)
+    monkeypatch.setattr(s3, "get_object", reading)
+    monkeypatch.setattr(aggregate_season, "aggregate_season_files", aggregation)
+    cold = invoke("poll_games")
+    assert cold["week"] == select_active_week(weeks)
+    assert s3.data(SEASON_KEY) == expected
+    assert reading.call_count == count + 1
+    reading.reset_mock()
+    aggregation.reset_mock()
+    provider.reset_mock()
+    before = s3.objects.copy()
+    result = invoke("poll_games")
+    assert result["week"] == cold["week"]
+    assert result["written"] == []
+    assert not result["scored"]
+    assert result["fetched"] == (state == "live")
+    assert reading.call_count == (2 if state in ("scheduled", "live") else 1)
+    aggregation.assert_not_called()
+    assert s3.objects == before
+
+
+@pytest.mark.parametrize("damage", ["malformed", "listing"])
+def test_poll_unusable_metadata_requires_reconciliation(setup, monkeypatch, damage):
+    from scripts import aggregate_season
+
+    s3, _ = setup
+    s3.seed(WEEK_KEY, weekly())
+    invoke("poll_games")
+    expected = s3.data(SEASON_KEY)
+    if damage == "malformed":
+        s3.metadata[SEASON_KEY] = {processing.POLL_SOURCES: "["}
+    else:
+        paginate = s3.paginate
+
+        def without_etags(**kwargs):
+            return [
+                {"Contents": [{"Key": item["Key"]} for item in page["Contents"]]}
+                for page in paginate(**kwargs)
+            ]
+
+        monkeypatch.setattr(s3, "paginate", without_etags)
+    aggregate = Mock(wraps=aggregate_season.aggregate_season_files)
+    monkeypatch.setattr(aggregate_season, "aggregate_season_files", aggregate)
+    assert not invoke("poll_games")["fetched"]
+    aggregate.assert_called_once()
+    assert s3.data(SEASON_KEY) == expected
+
+
+@pytest.mark.parametrize("failure", ["paginate", "get_object"])
+def test_poll_read_and_listing_failures_propagate(setup, monkeypatch, failure):
+    s3, _ = setup
+    s3.seed(WEEK_KEY, weekly())
+    monkeypatch.setattr(s3, failure, Mock(side_effect=error("AccessDenied")))
+    with pytest.raises(ClientError, match="AccessDenied"):
+        invoke("poll_games")
+
+
+def test_warm_poll_postponed_week_precedes_prepared_future(setup, monkeypatch):
+    s3, provider = setup
+    for week in (5, 6, 7):
+        data = {**weekly(), "week": week}
+        if week in (5, 7):
+            data["games"][0]["status"] = "scheduled"
+            data["games"][0]["scheduled_time"] = "2026-11-01T17:00:00+00:00"
+        s3.seed(f"data/2026/week{week:02d}.json", data)
+    s3.seed("data/available-weeks.json", {"2026": [5, 6]})
+    invoke("poll_games")
+    monkeypatch.setattr(processing, "now", lambda: datetime(2026, 11, 1, 17, tzinfo=UTC))
+    result = invoke("poll_games")
+    assert result["week"] == 5
+    provider.get_week.assert_called_once_with(season=2026, week=5)
+    assert s3.data("data/available-weeks.json") == {"2026": [5, 6]}
+
+
+def test_warm_partial_publication_recovery_budget(setup, monkeypatch):
+    from scripts import aggregate_season
+
+    s3, provider = setup
+    for week in range(1, 10):
+        data = {**weekly(), "week": week}
+        if week == 9:
+            data["games"][0]["status"] = "scheduled"
+            data["games"][0]["scheduled_time"] = "2026-10-25T17:00:00+00:00"
+        s3.seed(f"data/2026/week{week:02d}.json", data)
+    invoke("poll_games")
+    monkeypatch.setattr(processing, "now", lambda: datetime(2026, 10, 25, 17, tzinfo=UTC))
+    old_metadata = s3.metadata[SEASON_KEY].copy()
+    s3.fail = SEASON_KEY
+    with pytest.raises(ClientError):
+        invoke("poll_games")
+    assert s3.metadata[SEASON_KEY] == old_metadata
+    assert s3.data("data/2026/week09.json")["games"][0]["status"] == "final"
+    s3.fail = None
+    reading = Mock(wraps=s3.get_object)
+    aggregation = Mock(wraps=aggregate_season.aggregate_season_files)
+    monkeypatch.setattr(s3, "get_object", reading)
+    monkeypatch.setattr(aggregate_season, "aggregate_season_files", aggregation)
+    result = invoke("poll_games")
+    assert not result["fetched"] and not result["scored"]
+    assert result["written"] == [SEASON_KEY]
+    assert s3.data(SEASON_KEY)["weeks_scored"] == [9]
+    assert s3.data(SEASON_KEY)["players"]
+    assert reading.call_count == 10
+    aggregation.assert_called_once()
+    provider.get_week.assert_called_once()
+    reading.reset_mock()
+    aggregation.reset_mock()
+    assert invoke("poll_games")["written"] == []
+    assert reading.call_count == 1
+    aggregation.assert_not_called()
