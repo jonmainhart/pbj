@@ -28,6 +28,12 @@ const SEASON = 2026;
 let currentWeekData = null;
 let seasonData = null;
 let seasonLoading = false;
+let availableWeeks = [];
+let followLatest = true;
+let selectionInitialized = false;
+let selectionVersion = 0;
+let refreshPending = false;
+let weekLoading = false;
 
 document.addEventListener("DOMContentLoaded", async () => {
   initializeTabs();
@@ -35,24 +41,26 @@ document.addEventListener("DOMContentLoaded", async () => {
   initializeDocumentCards();
   loadAnnouncements();
 
+  initializeWeekSelector();
+  initializeAutoRefresh(refreshCurrentWeek);
+  if (document.hidden) return;
+  refreshPending = true;
   try {
-    const manifest = await fetchAvailableWeeks();
-    const availableWeeks = manifest[String(SEASON)] ?? [];
+    reconcileWeeks(await fetchAvailableWeeks());
 
     if (availableWeeks.length === 0) {
       setText("#weekly-message", "No weeks are available yet.");
       return;
     }
 
-    initializeWeekSelector(availableWeeks);
-
     const requestedWeek = getRequestedWeek(availableWeeks);
 
+    selectionInitialized = true;
+    followLatest = requestedWeek === availableWeeks.at(-1);
     document.querySelector("#week-select").value = String(requestedWeek);
 
     updateWeekQueryString(requestedWeek);
     await loadWeek(requestedWeek);
-    initializeAutoRefresh(refreshCurrentWeek);
   } catch (error) {
     setText(
       "#weekly-message",
@@ -60,56 +68,92 @@ document.addEventListener("DOMContentLoaded", async () => {
         ? error.message
         : "Unable to load available weeks.",
     );
+  } finally {
+    refreshPending = false;
   }
 });
 
 async function refreshCurrentWeek() {
-  if (isForegroundCardOpen()) {
-    return;
-  }
-
-  const week = Number(document.querySelector("#week-select").value);
-
+  if (document.hidden || refreshPending) return;
+  refreshPending = true;
+  const version = selectionVersion;
   try {
-    const data = await fetchWeek(SEASON, week);
-
-    // A card may have opened or the selected week changed while fetching.
+    try {
+      reconcileWeeks(await fetchAvailableWeeks());
+    } catch {
+      // A manifest failure must not interrupt live score refreshes.
+    }
     if (
-      isForegroundCardOpen() ||
-      Number(document.querySelector("#week-select").value) !== week
-    ) {
-      return;
+      document.hidden || weekLoading || isForegroundCardOpen() ||
+      version !== selectionVersion
+    ) return;
+
+    const select = document.querySelector("#week-select");
+    if (!availableWeeks.length) return;
+    const selected = Number(select.value);
+    let week = selected;
+    if (!selectionInitialized) {
+      week = getRequestedWeek(availableWeeks);
+    } else if (followLatest || !availableWeeks.includes(selected)) {
+      week = availableWeeks.at(-1);
+    }
+    if (!week) return;
+    const data = await fetchWeek(SEASON, week);
+    if (
+      document.hidden || weekLoading || isForegroundCardOpen() ||
+      version !== selectionVersion
+    ) return;
+
+    if (!selectionInitialized) {
+      selectionInitialized = true;
+      followLatest = week === availableWeeks.at(-1);
     }
 
-    if (JSON.stringify(data) === JSON.stringify(currentWeekData)) {
-      return;
+    if (week !== selected) {
+      select.value = String(week);
+      updateWeekQueryString(week);
+      resetWeeklyNavigation();
     }
-
+    if (JSON.stringify(data) === JSON.stringify(currentWeekData)) return;
     currentWeekData = data;
     seasonData = null;
-
     rememberPlayerNames(data.players ?? [], week);
     renderWeeklyView(data, getPlayerName);
+    setText("#weekly-message", "");
   } catch {
-    // Keep displaying the existing data if refresh fails.
+    // Keep displaying the existing data if refresh fails; retry next time.
+  } finally {
+    refreshPending = false;
   }
 }
 
-function initializeWeekSelector(availableWeeks) {
+function reconcileWeeks(manifest) {
+  const weeks = manifest?.[String(SEASON)];
+  if (!Array.isArray(weeks) || !weeks.length ||
+      !weeks.every((week) => Number.isInteger(week) && week > 0)) return;
+  const next = [...new Set(weeks)].sort((a, b) => a - b);
+  if (JSON.stringify(next) === JSON.stringify(availableWeeks)) return;
   const select = document.querySelector("#week-select");
-
-  for (const week of availableWeeks) {
+  const selected = select.value;
+  availableWeeks = next;
+  seasonData = null;
+  const options = next.map((week) => {
     const option = document.createElement("option");
-
     option.value = String(week);
     option.textContent = String(week);
+    return option;
+  });
+  select.replaceChildren(...options);
+  // Preserve the display until a replacement week has loaded successfully.
+  select.value = selected;
+}
 
-    select.append(option);
-  }
-
+function initializeWeekSelector() {
+  const select = document.querySelector("#week-select");
   select.addEventListener("change", () => {
     const week = Number(select.value);
-
+    selectionInitialized = true;
+    followLatest = week === availableWeeks.at(-1);
     updateWeekQueryString(week);
     loadWeek(week);
   });
@@ -155,6 +199,8 @@ function showView(view) {
 }
 
 async function loadWeek(week) {
+  const version = ++selectionVersion;
+  weekLoading = true;
   resetWeeklyNavigation("players");
 
   setText("#week-heading", `Week ${week}`);
@@ -169,18 +215,23 @@ async function loadWeek(week) {
   summary.replaceChildren();
 
   try {
-    currentWeekData = await fetchWeek(SEASON, week);
+    const data = await fetchWeek(SEASON, week);
+    if (version !== selectionVersion) return;
+    currentWeekData = data;
 
     rememberPlayerNames(currentWeekData.players ?? [], week);
 
     renderWeeklyView(currentWeekData, getPlayerName);
   } catch (error) {
+    if (version !== selectionVersion) return;
     setText("#week-status", `Week ${week}`);
 
     setText(
       "#weekly-message",
       error instanceof Error ? error.message : "Unable to load this week.",
     );
+  } finally {
+    if (version === selectionVersion) weekLoading = false;
   }
 }
 

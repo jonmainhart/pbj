@@ -54,3 +54,15 @@ for (const entry of cases) {
     await assert.rejects(entry.load, { message: "offline" });
   });
 }
+
+test("manifest discovery always makes a fresh no-store request", async (t) => {
+  let weeks = [9];
+  const fetch = t.mock.method(globalThis, "fetch", async (_url, options) => {
+    assert.equal(options.cache, "no-store");
+    return { ok: true, json: async () => ({ 2026: weeks }) };
+  });
+  assert.deepEqual(await fetchAvailableWeeks(), { 2026: [9] });
+  weeks = [9, 10];
+  assert.deepEqual(await fetchAvailableWeeks(), { 2026: [9, 10] });
+  assert.equal(fetch.mock.callCount(), 2);
+});

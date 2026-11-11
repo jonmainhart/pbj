@@ -206,3 +206,167 @@ for (const failure of ["network", "invalid JSON"]) {
     await expect(page.locator("#week-status")).toBeVisible();
   });
 }
+
+for (const initial of ["", "?week=7", "?week=9"]) {
+  test(`publication discovers Week 10 and respects latest preference: ${initial || "default"}`, async ({ page }) => {
+    await page.clock.install();
+    const processed = await trackWeekProcessing(page);
+    let weeks = [7, 9];
+    await mockDashboard(page, {
+      "/data/available-weeks.json": () => ({ 2026: weeks }),
+      "/data/2026/week07.json": week({ week: 7 }),
+      "/data/2026/week09.json": week({ week: 9 }),
+      "/data/2026/week10.json": week({ week: 10 }),
+      "/data/2026/week11.json": week({ week: 11 }),
+    });
+    await page.goto(`/${initial}`);
+    const selected = initial === "?week=7" ? "7" : "9";
+    await expect(page.locator("#week-select")).toHaveValue(selected);
+    await processed(1);
+    // The same option nodes must survive an unchanged manifest.
+    await page.locator("#week-select option").first().evaluate((option) => {
+      option.dataset.marker = "original";
+    });
+    await page.clock.runFor(60_000);
+    await processed(2);
+    await expect(page.locator("#week-select option").first()).toHaveAttribute("data-marker", "original");
+    weeks = [10, 7, 9, 10];
+    await page.clock.runFor(60_000);
+    await processed(3);
+    await expect(page.locator("#week-select option")).toHaveText(["7", "9", "10"]);
+    const expected = selected === "7" ? "7" : "10";
+    await expect(page.locator("#week-select")).toHaveValue(expected);
+    await expect(page).toHaveURL(new RegExp(`week=${expected}$`));
+    await expect(page.locator("#week-status")).toHaveText(`Week ${expected} In Progress`);
+    if (selected === "7") {
+      await page.locator("#week-select").selectOption("10");
+      await processed(4);
+    }
+    weeks = [7, 9, 10, 11];
+    await page.evaluate(() => {
+      Object.defineProperty(document, "hidden", { configurable: true, value: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await page.clock.runFor(120_000);
+    await expect(page.locator("#week-select option")).toHaveCount(3);
+    await page.evaluate(() => {
+      Object.defineProperty(document, "hidden", { configurable: true, value: false });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await expect(page.locator("#week-select")).toHaveValue("11");
+    await expect(page.locator("#week-status")).toHaveText("Week 11 In Progress");
+  });
+}
+
+test("publication failures preserve the display and open cards defer advancement", async ({ page }) => {
+  await page.clock.install();
+  const processed = await trackWeekProcessing(page);
+  let manifest = { 2026: [9] };
+  let published = null;
+  await mockDashboard(page, {
+    "/data/available-weeks.json": () => manifest,
+    "/data/2026/week09.json": week({ week: 9 }),
+    "/data/2026/week10.json": () => published,
+  });
+  await page.goto("/");
+  await processed(1);
+  let count = 1;
+  for (const invalid of [null, {}, { 2026: [] }, { 2026: ["10"] }]) {
+    manifest = invalid;
+    await page.clock.runFor(60_000);
+    await processed(++count);
+  }
+  manifest = { 2026: [9, 10] };
+  await page.clock.runFor(60_000);
+  await processed(count + 1);
+  await expect(page.locator("#week-select")).toHaveValue("9");
+  await expect(page.locator("#week-status")).toHaveText("Week 9 In Progress");
+  await expect(page).toHaveURL(/week=9$/);
+  published = week({ week: 10, players: [player("beth")] });
+  await page.getByRole("button", { name: /alex/ }).click();
+  await page.clock.runFor(60_000);
+  await expect(page.locator(".player-card-overlay .player-name")).toHaveText("alex");
+  await page.keyboard.press("Escape");
+  await page.clock.runFor(60_000);
+  await expect(page.locator("#week-select")).toHaveValue("10");
+  await expect(page.locator("#player-list .player-name")).toHaveText("beth");
+});
+
+test("overlapping publication refreshes cannot overwrite manual navigation", async ({ page }) => {
+  await page.clock.install();
+  const processed = await trackWeekProcessing(page);
+  let weeks = [7, 9];
+  let manifests = 0;
+  await mockDashboard(page, {
+    "/data/available-weeks.json": () => {
+      manifests++;
+      return { 2026: weeks };
+    },
+    "/data/2026/week07.json": week({ week: 7 }),
+    "/data/2026/week09.json": week({ week: 9 }),
+  });
+  await page.goto("/");
+  await processed(1);
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  await page.route("**/week10.json", async (route) => {
+    await held;
+    await route.fulfill({ json: week({ week: 10 }) });
+  });
+  weeks = [7, 9, 10];
+  const requested = page.waitForRequest("**/week10.json");
+  await page.clock.runFor(60_000);
+  await requested;
+  await page.clock.runFor(120_000);
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  expect(manifests).toBe(2);
+  await page.locator("#week-select").selectOption("7");
+  await processed(2);
+  release();
+  await processed(3);
+  await expect(page.locator("#week-select")).toHaveValue("7");
+  await expect(page.locator("#week-status")).toHaveText("Week 7 In Progress");
+  await expect(page).toHaveURL(/week=7$/);
+});
+
+test("rapid manual week changes ignore an older successful response", async ({ page }) => {
+  const processed = await trackWeekProcessing(page);
+  await mockDashboard(page, {
+    "/data/available-weeks.json": { 2026: [7, 9] },
+    "/data/2026/week09.json": week({ week: 9 }),
+  });
+  await page.goto("/");
+  await processed(1);
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  await page.route("**/week07.json", async (route) => {
+    await held;
+    await route.fulfill({ json: week({ week: 7 }) });
+  });
+  const requested = page.waitForRequest("**/week07.json");
+  await page.locator("#week-select").selectOption("7");
+  await requested;
+  await page.locator("#week-select").selectOption("9");
+  await processed(2);
+  release();
+  await processed(3);
+  await expect(page.locator("#week-status")).toHaveText("Week 9 In Progress");
+  await expect(page).toHaveURL(/week=9$/);
+});
+
+test("a failed initial manifest recovers on resume and honors a historical deep link", async ({ page }) => {
+  await page.clock.install();
+  let manifest = null;
+  await mockDashboard(page, {
+    "/data/available-weeks.json": () => manifest,
+    "/data/2026/week07.json": week({ week: 7 }),
+    "/data/2026/week09.json": week({ week: 9 }),
+  });
+  await page.goto("/?week=7");
+  await expect(page.locator("#weekly-message")).toHaveText("Available weeks could not be loaded.");
+  manifest = { 2026: [7, 9] };
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await expect(page.locator("#week-select")).toHaveValue("7");
+  await expect(page.locator("#week-status")).toHaveText("Week 7 In Progress");
+  await expect(page.locator("#weekly-message")).toBeEmpty();
+});
