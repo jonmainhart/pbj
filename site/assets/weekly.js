@@ -9,10 +9,36 @@ import { getPickStatus } from "./pick-status.js";
 import { formatGameDisplay } from "./game-display.js";
 import { renderGames } from "./games.js";
 
+let weeklyData = null;
+let activePresentation = "players";
+let renderedInputs = {};
+
+export function clearWeeklyView() {
+  weeklyData = null;
+  renderedInputs = {};
+}
+
+// Called before navigation looks up a card, including drill-down and return.
+export function renderWeeklyPresentation(view) {
+  activePresentation = view;
+  if (!weeklyData) return;
+  const players = weeklyData.players ?? [];
+  const games = weeklyData.games ?? [];
+  const results = weeklyData.results ?? null;
+  const inputs = JSON.stringify(
+    view === "games" ? [games, players] : [players, games, results],
+  );
+  if (renderedInputs[view] === inputs) return;
+  if (view === "games") {
+    renderGames(games, players);
+  } else {
+    renderPlayers(players, games, results);
+  }
+  renderedInputs[view] = inputs;
+}
+
 export function renderWeeklyView(data, getPlayerName) {
-  const results = data.results ?? null;
-  const players = data.players ?? [];
-  const games = data.games ?? [];
+  weeklyData = data;
 
   const complete = isWeekComplete(data);
 
@@ -22,8 +48,7 @@ export function renderWeeklyView(data, getPlayerName) {
   );
 
   renderWeeklySummary(data, getPlayerName);
-  renderPlayers(players, games, results);
-  renderGames(games, players);
+  renderWeeklyPresentation(activePresentation);
 }
 
 function renderWeeklySummary(data, getPlayerName) {

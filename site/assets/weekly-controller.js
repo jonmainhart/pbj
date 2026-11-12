@@ -1,3 +1,4 @@
+import { renderWeeklyPresentation } from "./weekly.js";
 import { openEntity, crossNavigate, closeEntity } from "./weekly-navigation.js";
 import {
   initializePlayerCardInteractions,
@@ -89,6 +90,7 @@ function showActiveCard() {
 }
 
 function showWeeklyPresentation() {
+  renderWeeklyPresentation(state.view);
   for (const view of ["players", "games"]) {
     const selected = state.view === view;
     document

@@ -18,7 +18,7 @@ import {
   initializeWeeklyInteractions,
 } from "./weekly-controller.js";
 
-import { renderWeeklyView } from "./weekly.js";
+import { clearWeeklyView, renderWeeklyView } from "./weekly.js";
 
 import { renderSeason } from "./season.js";
 
@@ -202,6 +202,7 @@ function showView(view) {
 async function loadWeek(week) {
   const version = ++selectionVersion;
   weekLoading = true;
+  clearWeeklyView();
   resetWeeklyNavigation("players");
 
   setText("#week-heading", `Week ${week}`);

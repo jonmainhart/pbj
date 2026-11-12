@@ -433,6 +433,7 @@ test("a week change clears navigation context and starts the new week in Players
   // selectOption changes the underlying selector even while the overlay is open.
   await page.getByRole("combobox", { name: "Week" }).selectOption("2");
   await expect(page.locator("#week-status")).toHaveText("Week 2 In Progress");
+  await expect(page.locator("#game-list > article")).toHaveCount(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Players", exact: true }),
@@ -481,4 +482,65 @@ test("a delayed refresh cannot replace a game card opened while the request was 
   await expect(
     details(page, "Game").getByRole("button", { name: /BUF.*MIA/ }),
   ).toContainText("Scheduled");
+});
+
+test("weekly presentations render on demand and reuse cards until their inputs change", async ({ page }) => {
+  const processed = await trackWeekProcessing(page);
+  await page.clock.install();
+  let current = week({ games: [gameOne, gameTwo], players });
+  await mockDashboard(page, { "/data/2026/week01.json": () => current });
+  await page.goto("/");
+  await expect(playerSummary(page)).toBeVisible();
+  await expect(page.locator("#game-list > article")).toHaveCount(0);
+  await showGames(page);
+  await page.evaluate(() => {
+    window.savedGame = document.querySelector("#game-list > article");
+    window.savedPlayer = document.querySelector("#player-list > article");
+  });
+  await page.locator("#players-toggle").click();
+  await showGames(page);
+  expect(await page.evaluate(() => window.savedGame === document.querySelector("#game-list > article"))).toBe(true);
+
+  current = { ...current, results: { player_count: 3, players: [] } };
+  await page.clock.runFor(60_000);
+  await processed(2);
+  await expect(page.locator("#weekly-summary .summary-value").first()).toHaveText("3");
+  expect(await page.evaluate(() => window.savedGame === document.querySelector("#game-list > article"))).toBe(true);
+  expect(await page.evaluate(() => window.savedPlayer === document.querySelector("#player-list > article"))).toBe(true);
+
+  current = week({ games: [game("one", { status: "live", away_score: 7, home_score: 0 }), gameTwo], players });
+  await page.clock.runFor(60_000);
+  await processed(3);
+  await expect(gameSummary(page)).toContainText("Live");
+  expect(await page.evaluate(() => window.savedPlayer === document.querySelector("#player-list > article"))).toBe(true);
+  await page.locator("#players-toggle").click();
+  expect(await page.evaluate(() => window.savedPlayer === document.querySelector("#player-list > article"))).toBe(false);
+  await page.evaluate(() => { window.savedGame = document.querySelector("#game-list > article"); });
+  current = week({ games: [gameOne, gameTwo], players: [player("new-player", { picks: { one: "BUF" } })] });
+  await page.clock.runFor(60_000);
+  await processed(4);
+  await expect(playerSummary(page, "new-player")).toBeVisible();
+  expect(await page.evaluate(() => window.savedGame === document.querySelector("#game-list > article"))).toBe(true);
+  await showGames(page);
+  await gameSummary(page).click();
+  await expect(details(page, "Game").getByRole("button", { name: /new-player/ })).toBeVisible();
+  await expect(details(page, "Game").getByRole("button", { name: /Ace/ })).toHaveCount(0);
+});
+
+test("switching presentations after a failed week load cannot restore old cards", async ({ page }) => {
+  await mockDashboard(page, {
+    "/data/available-weeks.json": { 2026: [1, 2] },
+    "/data/2026/week01.json": week({ games: [gameOne, gameTwo], players }),
+    "/data/2026/week02.json": null,
+  });
+  await page.goto("/?week=1");
+  await showGames(page);
+  await expect(page.locator("#game-list > article")).toHaveCount(2);
+  await page.getByRole("combobox", { name: "Week" }).selectOption("2");
+  await expect(page.locator("#weekly-message")).not.toBeEmpty();
+  await page.locator("#games-toggle").click();
+  await expect(page.locator("#games-toggle")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#game-list > article")).toHaveCount(0);
+  await page.locator("#players-toggle").click();
+  await expect(page.locator("#player-list > article")).toHaveCount(0);
 });
