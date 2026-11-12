@@ -49,6 +49,7 @@ ALLOWED.update(
         "GET /announcements",
         "PUT /announcements",
         "GET /schedules",
+        "GET /bootstrap",
         "POST /schedules/next",
         "GET /weeks/{season}/{week}",
         "POST /weeks/{season}/{week}/validate",

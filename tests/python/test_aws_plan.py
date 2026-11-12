@@ -1,8 +1,11 @@
 """Deployment plans must not delete resources or expand managed scope."""
 
 import json
+import re
+import runpy
 import subprocess
 import sys
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -72,6 +75,10 @@ SCHEDULER_INPUT = '{"action":"create_week","scheduled_time":"<aws.scheduler.sche
         ('aws_apigatewayv2_route.admin["POST /schedules/next"]', ["create"], True),
         ('aws_apigatewayv2_route.admin["GET /announcements"]', ["create"], True),
         ('aws_apigatewayv2_route.admin["PUT /announcements"]', ["create"], True),
+        ('aws_apigatewayv2_route.admin["GET /bootstrap"]', ["create"], True),
+        ('aws_apigatewayv2_route.admin["GET /bootstrap"]', ["update"], True),
+        ('aws_apigatewayv2_route.admin["GET /bootstrap"]', ["delete"], False),
+        ('aws_apigatewayv2_route.admin["GET /bootstrap"]', ["delete", "create"], False),
         ('aws_apigatewayv2_route.admin["DELETE /weeks/{season}/{week}"]', ["create"], False),
         ("aws_s3_object.picks", ["create"], False),
         ("aws_cloudfront_cache_policy.assets", ["create"], False),
@@ -92,6 +99,28 @@ def test_plan_guard(address: str, actions: list[str], accepted: bool) -> None:
         [sys.executable, str(GUARD)], input=json.dumps(plan), text=True, capture_output=True
     )
     assert (result.returncode == 0) is accepted, result.stderr
+
+
+def test_admin_routes_match_plan_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
+    terraform = (GUARD.parent / "terraform/admin.tf").read_text()
+    routes = re.search(
+        r'resource "aws_apigatewayv2_route" "admin"\s*\{\s*'
+        r"for_each\s*=\s*toset\(\[(.*?)\]\)",
+        terraform,
+        re.DOTALL,
+    )
+    assert routes is not None, "Expected an explicit admin route list in Terraform"
+    defined_routes = set(re.findall(r'"([^"]+)"', routes.group(1)))
+    assert defined_routes, "Terraform admin route list must not be empty"
+
+    monkeypatch.setattr(sys, "stdin", StringIO("{}"))
+    allowed = runpy.run_path(str(GUARD))["ALLOWED"]
+    allowed_routes = {
+        match.group(1)
+        for address in allowed
+        if (match := re.fullmatch(r'aws_apigatewayv2_route\.admin\["(.+)"\]', address))
+    }
+    assert defined_routes == allowed_routes
 
 
 @pytest.mark.parametrize("actions", [["create"], ["update"], ["no-op"]])
