@@ -14,7 +14,7 @@ from botocore.exceptions import ClientError
 from aws import admin, storage
 from aws.admin_csv import inspect_csv
 from pbj.importers.numbers import import_players
-from pbj.week_data import load_games
+from pbj.week_data import load_games, parse_games
 
 
 def test_empty_headers_follow_schedule():
@@ -1227,3 +1227,70 @@ def test_announcement_existing_direct_read_does_not_list(monkeypatch):
     assert result["statusCode"] == 200
     assert json.loads(result["body"]) == {"document": announcement_document(), "etag": "version"}
     client.list_objects_v2.assert_not_called()
+
+
+@pytest.mark.parametrize("source", ["empty", "published", "draft"])
+def test_bootstrap_reuses_week_contract_and_reads_only_current_week(monkeypatch, source):
+    s3, _, processor = creation_api(monkeypatch)
+    raw = json.loads(Path("data/2026/week01.json").read_bytes())
+    if source == "empty":
+        raw["players"] = []
+    s3.seed("data/2026/week01.json", raw)
+    s3.seed("data/2025/week01.json", {"not": "loaded"})
+    s3.seed("data/available-weeks.json", {"2025": [1], "2026": [1]})
+    if source == "draft":
+        s3.objects["incoming/2026/drafts/week01.csv"] = valid_csv().encode()
+    s3.get_object = MagicMock(wraps=s3.get_object)
+    s3.get_paginator = MagicMock(wraps=s3.get_paginator)
+    s3.put_object = MagicMock(wraps=s3.put_object)
+    s3.head_object = MagicMock(side_effect=AssertionError("Bootstrap must not HEAD"))
+    s3.delete_object = MagicMock(side_effect=AssertionError("Bootstrap must not delete"))
+    parse = MagicMock(wraps=parse_games)
+    monkeypatch.setattr(admin, "parse_games", parse)
+    result = admin.lambda_handler(event("/bootstrap"), None)
+    assert result["statusCode"] == 200
+    body = json.loads(result["body"])
+    assert body["user_id"] == "commissioner"
+    assert (body["season"], body["week"]) == (2026, 1)
+    assert body["editor"]["source"] == source
+    assert bool(body["editor"]["etag"]) == (source == "draft")
+    assert [call.kwargs["Key"] for call in s3.get_object.call_args_list] == [
+        "data/available-weeks.json",
+        "data/2026/week01.json",
+        "incoming/2026/drafts/week01.csv",
+    ]
+    s3.get_paginator.assert_called_once_with("list_objects_v2")
+    s3.put_object.assert_not_called()
+    s3.head_object.assert_not_called()
+    s3.delete_object.assert_not_called()
+    parse.assert_called_once_with(raw)
+    processor.invoke.assert_not_called()
+    bootstrap_reads = s3.get_object.call_args_list.copy()
+    s3.get_object.reset_mock()
+    s3.get_paginator.reset_mock()
+    legacy_catalog = json.loads(admin.lambda_handler(event("/schedules"), None)["body"])
+    assert {k: v for k, v in body.items() if k != "editor"} == legacy_catalog
+    assert body["editor"] == json.loads(admin.lambda_handler(event(), None)["body"])
+    assert s3.get_object.call_args_list == bootstrap_reads
+    s3.get_paginator.assert_called_once_with("list_objects_v2")
+
+
+def test_bootstrap_authorization_and_route_protection(monkeypatch):
+    monkeypatch.setenv("PBJ_ADMIN_CLIENT_ID", "spa")
+    client = MagicMock()
+    monkeypatch.setattr(storage, "client", client)
+    for claim, value in [
+        ("sub", ""),
+        ("token_use", "id"),
+        ("scope", "openid"),
+        ("client_id", "other"),
+    ]:
+        request = event("/bootstrap")
+        request["requestContext"]["authorizer"]["jwt"]["claims"][claim] = value
+        assert admin.lambda_handler(request, None)["statusCode"] == 403
+    client.assert_not_called()
+    config = Path("aws/terraform/admin.tf").read_text()
+    assert '"GET /bootstrap"' in config
+    route = config.split('resource "aws_apigatewayv2_route"')[1].split("\n}")[0]
+    assert 'authorization_type = "JWT"' in " ".join(route.split())
+    assert 'authorization_scopes = ["pbj/admin"]' in route

@@ -249,8 +249,8 @@ function options(id, values, selected) {
     }),
   );
 }
-async function open(next, requireDraft = false) {
-  const result = await api(`/weeks/${next.season}/${next.week}`);
+async function open(next, requireDraft = false, initial = null) {
+  const result = initial ?? (await api(`/weeks/${next.season}/${next.week}`));
   if (requireDraft && result.source !== "draft")
     throw new Error(
       "The saved draft no longer exists. Your work is preserved.",
@@ -310,7 +310,7 @@ async function open(next, requireDraft = false) {
       !recovery.table.needsHeaderChoice &&
       toCSV(recovery.table) === toCSV(table)
     ) {
-      device.removeItem(key);
+      if (!initializing) device.removeItem(key);
       recovery = null;
     }
   } catch {
@@ -776,7 +776,7 @@ async function initializePortal() {
   $("login").textContent = "Signing in ...";
   status("Signed in. Loading commissioner portal…");
   try {
-    catalog = await api("/schedules");
+    catalog = await api("/bootstrap");
     if (typeof catalog.user_id !== "string" || !catalog.user_id)
       throw new Error("Commissioner identity could not be verified.");
     scope = recoveryScope(config, catalog.user_id);
@@ -789,7 +789,13 @@ async function initializePortal() {
       $("recovery-status").textContent =
         "Device recovery is unavailable. Keep this page open until Save Draft succeeds.";
     }
-    await open(next);
+    await open(
+      next,
+      false,
+      Number(next.season) === catalog.season && next.week === catalog.week
+        ? catalog.editor
+        : null,
+    );
     $("portal-nav").hidden = false;
     $("editor").hidden = false;
     $("logout").hidden = false;

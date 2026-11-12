@@ -1,5 +1,19 @@
 import { test, expect } from "@playwright/test";
 
+const initialEditors = new WeakMap();
+
+async function catalogRoute(page, handler) {
+  await page.route("https://admin.example/{schedules,bootstrap}", (route) =>
+    handler({
+      fulfill: (options) =>
+        route.fulfill({
+          ...options,
+          json: { ...options.json, editor: initialEditors.get(page) },
+        }),
+    }),
+  );
+}
+
 async function authenticated(
   page,
   {
@@ -15,6 +29,15 @@ async function authenticated(
     intercept = (_route, next) => next(),
   } = {},
 ) {
+  initialEditors.set(page, {
+    games: games || [{ id: "game", away: "NE", home: "SEA" }],
+    headers: headers || ["NAME", "NE SEA", "TIEBREAKER"],
+    rows,
+    etag,
+    published,
+    source: etag ? "draft" : published ? "published" : "empty",
+    issues: [],
+  });
   await page.route("**/assets/admin-config.json", (route) =>
     route.fulfill({
       json: {
@@ -42,13 +65,14 @@ async function authenticated(
         "Bearer test-access",
       );
       const path = new URL(route.request().url()).pathname;
-      if (path === "/schedules")
+      if (path === "/schedules" || path === "/bootstrap")
         return route.fulfill({
           json: {
             seasons: { 2026: [1, 2, 3] },
             season: 2026,
             week: 2,
             user_id: user,
+            editor: initialEditors.get(page),
           },
         });
       if (path.endsWith("/3") && !unpublished)
@@ -818,7 +842,7 @@ test("account isolation, rejected identity, and deliberate device-copy discard",
   await expect(page.locator("#recovery")).toBeHidden();
   await expect(page.getByLabel("Player 1 NAME", { exact: true })).toBeEnabled();
   await page.getByLabel("Player 1 NAME", { exact: true }).fill("Private");
-  await page.route("https://admin.example/schedules", (route) =>
+  await catalogRoute(page, (route) =>
     route.fulfill({ status: 403, json: { message: "Forbidden" } }),
   );
   await page.goto("/admin/?code=revoked&state=state");
@@ -1789,7 +1813,7 @@ test("create next week confirms, blocks duplicates, refreshes and opens its sche
   let created = false,
     requests = 0,
     release;
-  await page.route("https://admin.example/schedules", (route) =>
+  await catalogRoute(page, (route) =>
     route.fulfill({
       json: {
         seasons: { 2026: created ? [1, 2, 3] : [1, 2] },
@@ -1857,6 +1881,7 @@ test("create next week confirms, blocks duplicates, refreshes and opens its sche
 
 for (const selected of [
   undefined,
+  { season: 2026, week: 2 },
   { season: 2026, week: 1 },
   { season: 2026, week: 3 },
   { season: 2026, week: 18 },
@@ -1875,15 +1900,17 @@ for (const selected of [
         selected?.week === 1 || selected?.week === 3 ? selected.week : 2;
       await expect(page.locator("#week")).toHaveValue(String(expected));
       await expect(page.locator('#week option[value="3"]')).toHaveCount(1);
-      expect(requests).toEqual(["/schedules", `/weeks/2026/${expected}`]);
+      const startup = expected === 2
+        ? ["/bootstrap"]
+        : ["/bootstrap", `/weeks/2026/${expected}`];
+      expect(requests).toEqual(startup);
       const next = expected === 1 ? 2 : 1;
       await page.locator("#week").selectOption(String(next));
       await expect(page.locator("#status")).toHaveText(
         `Season 2026 · Week ${next}`,
       );
       expect(requests).toEqual([
-        "/schedules",
-        `/weeks/2026/${expected}`,
+        ...startup,
         `/weeks/2026/${next}`,
       ]);
     },
@@ -1896,7 +1923,7 @@ test("uncertain creation refreshes metadata and preserves the selected editor wi
   await authenticated(page);
   let failed = false,
     creations = 0;
-  await page.route("https://admin.example/schedules", (route) =>
+  await catalogRoute(page, (route) =>
     route.fulfill({
       json: {
         seasons: { 2026: failed ? [1, 2, 3] : [1, 2] },
@@ -1992,7 +2019,7 @@ for (const action of ["create", "publish"]) {
       posts = 0,
       release;
     const requests = [];
-    await page.route("https://admin.example/schedules", (route) =>
+    await catalogRoute(page, (route) =>
       route.fulfill({
         json: {
           seasons: {
@@ -2077,7 +2104,7 @@ test("a prepared future week has no publication action even with a future browse
   page,
 }) => {
   await authenticated(page, { unpublished: true });
-  await page.route("https://admin.example/schedules", (route) =>
+  await catalogRoute(page, (route) =>
     route.fulfill({
       json: {
         seasons: { 2026: [1, 2, 3] },
@@ -2106,7 +2133,7 @@ for (const completed of [false, true])
       await page.clock.install();
       let attempted = false,
         posts = 0;
-      await page.route("https://admin.example/schedules", (route) =>
+      await catalogRoute(page, (route) =>
         route.fulfill({
           json: {
             seasons: { 2026: [1, 2, 3] },
@@ -2182,7 +2209,7 @@ test("uncertain publication with a failed catalog refresh disables the stale act
   await page.clock.install();
   let attempted = false,
     posts = 0;
-  await page.route("https://admin.example/schedules", (route) =>
+  await catalogRoute(page, (route) =>
     route.fulfill(
       attempted
         ? { status: 502, json: { message: "Catalog unavailable" } }
@@ -2461,9 +2488,10 @@ for (const stage of ["token", "catalog", "week"]) {
       stage === "token"
         ? "https://login.example/oauth2/token"
         : stage === "catalog"
-          ? "https://admin.example/schedules"
-          : "https://admin.example/weeks/2026/2";
+          ? "https://admin.example/bootstrap"
+          : "https://admin.example/weeks/2026/1";
     await authenticated(page, {
+      selected: stage === "week" ? { season: 2026, week: 1 } : undefined,
       waitForReady: false,
       intercept: async (route, next) => {
         if (route.request().url() === target) await pending;
@@ -2519,24 +2547,28 @@ for (const stage of [
       }
       if (
         failed &&
-        ((stage === "catalog" && path === "/schedules") ||
+        ((stage === "catalog" && path === "/bootstrap") ||
           (stage === "week" && path.startsWith("/weeks/")))
       )
         return route.fulfill({
           status: 503,
           json: { message: "Temporarily unavailable" },
         });
-      if (stage === "identity" && path === "/schedules")
+      if (stage === "identity" && path === "/bootstrap")
         return route.fulfill({
           json: { seasons: { 2026: [2] }, season: 2026, week: 2 },
         });
-      if (stage === "expired" && path === "/schedules")
+      if (stage === "expired" && path === "/bootstrap")
         return route.fulfill({ status: 403, json: {} });
-      if (!failed && path === "/schedules") await retryPending;
+      if (!failed && path === "/bootstrap") await retryPending;
       return next();
     };
     // Set up mocks without waiting for a ready editor on this failed visit.
-    await authenticated(page, { waitForReady: false, intercept });
+    await authenticated(page, {
+      selected: stage === "week" ? { season: 2026, week: 1 } : undefined,
+      waitForReady: false,
+      intercept,
+    });
     if (stage === "declined") {
       await expect(page.locator("#editor")).toBeVisible();
       await page.goto("/admin/?error=access_denied");
@@ -2578,10 +2610,10 @@ for (const stage of [
       await expect(page.locator("#editor")).toBeVisible();
       await expect(page.locator("#login")).toBeHidden();
       expect(tokens).toBe(1);
-      expect(requests.filter((path) => path === "/schedules")).toHaveLength(2);
+      expect(requests.filter((path) => path === "/bootstrap")).toHaveLength(2);
       expect(
         requests.filter((path) => path.startsWith("/weeks/")),
-      ).toHaveLength(stage === "catalog" ? 1 : 2);
+      ).toHaveLength(stage === "catalog" ? 0 : 2);
     }
   });
 }
@@ -2648,4 +2680,58 @@ test("failed sign-in initiation restores the sign-in button", async ({
   await expect(page.locator("#login")).toBeVisible();
   await expect(page.locator("#login")).toBeEnabled();
   await expect(page.locator("#login")).toHaveText("Sign in");
+});
+
+test("bootstrap verifies identity before device access and retry preserves recovery", async ({
+  page,
+}) => {
+  const key = 'pbj.draft.["https://admin.example","spa","commissioner"].2026.2';
+  const record = JSON.stringify({
+    version: 1,
+    table: {
+      headers: ["NAME", "NE SEA", "TIEBREAKER"],
+      rows: [["Recover me", "SEA", "30"]],
+    },
+    etag: "older",
+  });
+  await page.addInitScript(({ key, record }) => {
+    localStorage.setItem(key, record);
+    window.deviceReads = [];
+    const read = Storage.prototype.getItem;
+    Storage.prototype.getItem = function (name) {
+      if (this === localStorage) window.deviceReads.push(name);
+      return read.call(this, name);
+    };
+  }, { key, record });
+  let release;
+  const pending = new Promise((resolve) => {
+    release = resolve;
+  });
+  let failed = true;
+  await authenticated(page, {
+    waitForReady: false,
+    intercept: async (route, next) => {
+      if (new URL(route.request().url()).pathname === "/bootstrap" && failed) {
+        await pending;
+        return route.fulfill({ status: 503, json: { message: "Unavailable" } });
+      }
+      return next();
+    },
+  });
+  await expect(page.locator("#status")).toContainText("Loading commissioner portal");
+  expect(await page.evaluate(() => window.deviceReads)).toEqual([]);
+  release();
+  await expect(page.locator("#login")).toHaveText("Retry loading portal");
+  expect(await page.evaluate((key) => localStorage.getItem(key), key)).toBe(record);
+  failed = false;
+  await page.locator("#login").click();
+  await expect(page.locator("#editor")).toBeVisible();
+  await expect(page.locator("#recovery")).toBeVisible();
+  expect(await page.evaluate((key) => localStorage.getItem(key), key)).toBe(record);
+  await authenticated(page, {
+    etag: "older",
+    rows: [["Recover me", "SEA", "30"]],
+  });
+  await expect(page.locator("#recovery")).toBeHidden();
+  expect(await page.evaluate((key) => localStorage.getItem(key), key)).toBe(record);
 });

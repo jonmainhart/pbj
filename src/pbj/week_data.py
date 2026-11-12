@@ -15,6 +15,11 @@ def load_games(path: Path) -> list[Game]:
 
     raw: Any = json.loads(path.read_text(encoding="utf-8"))
 
+    return parse_games(raw)
+
+
+def parse_games(raw: Any) -> list[Game]:
+    """Convert an already decoded weekly document using the file loader rules."""
     if not isinstance(raw, dict):
         raise ValueError("Weekly JSON must contain an object")
 

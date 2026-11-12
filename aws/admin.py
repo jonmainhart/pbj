@@ -4,8 +4,6 @@ import base64
 import json
 import os
 import re
-from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
@@ -15,7 +13,7 @@ from botocore.exceptions import ClientError
 
 from aws import processing, storage
 from aws.admin_csv import inspect_csv, published_csv
-from pbj.week_data import load_games
+from pbj.week_data import parse_games
 
 if TYPE_CHECKING:
     from mypy_boto3_s3 import S3Client
@@ -263,12 +261,12 @@ def dispatch(event: dict[str, Any]) -> dict[str, Any]:
         return announcements(event, s3, config)
     if method == "POST" and path == "/schedules/next":
         return create_next(event, s3, config)
-    if method == "GET" and path == "/schedules":
+    if method == "GET" and path in ("/schedules", "/bootstrap"):
         catalog = processing.discover_schedules(s3, config)
-        return response(
-            200,
-            {**catalog, "user_id": event["requestContext"]["authorizer"]["jwt"]["claims"]["sub"]},
-        )
+        catalog["user_id"] = event["requestContext"]["authorizer"]["jwt"]["claims"]["sub"]
+        if path == "/schedules":
+            return response(200, catalog)
+        path = f"/weeks/{catalog['season']}/{catalog['week']}"
     match = re.fullmatch(r"/weeks/(\d{4})/(0?[1-9]|1[0-8])(?:/(validate|draft|submit))?", path)
     if not match:
         return response(404, {"message": "Unknown endpoint"})
@@ -277,32 +275,30 @@ def dispatch(event: dict[str, Any]) -> dict[str, Any]:
     schedule = storage.read(s3, config, config.key(f"{season}/week{week:02d}.json"), required=True)
     if schedule is None:
         raise ValueError("Schedule unavailable")
-    with TemporaryDirectory() as directory:
-        local = Path(directory) / "week.json"
-        local.write_bytes(schedule.content)
-        games = load_games(local)
+    document = json.loads(schedule.content)
+    games = parse_games(document)
     if not games:
         return response(404, {"message": "Selected week has no schedule"})
     key = f"incoming/{season}/drafts/week{week:02d}.csv"
-    published = bool(json.loads(schedule.content).get("players", []))
+    published = bool(document.get("players", []))
     if method == "GET" and action is None:
         draft = read_commissioner_object(s3, config, key)
         text = (
             draft.content.decode("utf-8-sig")
             if draft is not None
-            else published_csv(json.loads(schedule.content).get("players", []), games)
+            else published_csv(document.get("players", []), games)
         )
+        editor = {
+            **inspect_csv(text, games),
+            "source": "draft" if draft is not None else "published" if published else "empty",
+            "published": published,
+            "etag": draft.etag if draft is not None else None,
+            "games": [
+                dict(id=g.id, away=g.away.abbreviation, home=g.home.abbreviation) for g in games
+            ],
+        }
         return response(
-            200,
-            {
-                **inspect_csv(text, games),
-                "source": "draft" if draft is not None else "published" if published else "empty",
-                "published": published,
-                "etag": draft.etag if draft is not None else None,
-                "games": [
-                    dict(id=g.id, away=g.away.abbreviation, home=g.home.abbreviation) for g in games
-                ],
-            },
+            200, {**catalog, "editor": editor} if event["rawPath"] == "/bootstrap" else editor
         )
     body_text = event.get("body") or "{}"
     if event.get("isBase64Encoded"):
