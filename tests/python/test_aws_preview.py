@@ -36,7 +36,12 @@ def test_upload_only_public_static_files(tmp_path):
         "index.html",
         "manifest.webmanifest",
         "assets/app.js",
-        "assets/img/logo-transparent-full.png",
+        "assets/img/logo-transparent-full.webp",
+        "assets/img/pbj-hero.webp",
+        "assets/img/apple-touch-icon.png",
+        "assets/img/logo-192x192.png",
+        "assets/img/logo-512x512.png",
+        "assets/img/favicon.png",
         "assets/documents/rules.html",
         "LEGAL.md",
     } <= keys
@@ -53,11 +58,14 @@ def test_upload_only_public_static_files(tmp_path):
     headers = {key: args for _, key, args in calls}
     assert headers["index.html"]["ContentType"] == "text/html"
     assert headers["assets/documents/rules.html"]["ContentType"] == "text/html"
-    assert headers["assets/img/logo-transparent-full.png"]["ContentType"] == "image/png"
+    for name in ("logo-transparent-full.webp", "pbj-hero.webp"):
+        key = f"assets/img/{name}"
+        assert headers[key]["ContentType"] == "image/webp"
+        assert (artifact / key).read_bytes() == (ROOT / "site" / key).read_bytes()
+        assert key.replace(".webp", ".png") not in keys
+    for name in ("apple-touch-icon.png", "logo-192x192.png", "logo-512x512.png", "favicon.png"):
+        assert headers[f"assets/img/{name}"]["ContentType"] == "image/png"
     assert headers["assets/app.js"]["ContentType"] in {"text/javascript", "application/javascript"}
-    assert (artifact / "assets/img/logo-transparent-full.png").read_bytes() == (
-        ROOT / "site/assets/img/logo-transparent-full.png"
-    ).read_bytes()
     assert (artifact / "CNAME").exists()
     assert (artifact / "data/available-weeks.json").exists()
 

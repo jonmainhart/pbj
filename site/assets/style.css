@@ -229,7 +229,7 @@ select:focus-visible {
   overflow: hidden;
 
   background-color: var(--header);
-  background-image: url("./img/pbj-hero.png");
+  background-image: url("./img/pbj-hero.webp");
   background-repeat: no-repeat;
   background-position: calc(100% + 5rem) calc(100% + 0.75rem);
   background-size: 24rem auto;

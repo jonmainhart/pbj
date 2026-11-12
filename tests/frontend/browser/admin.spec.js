@@ -570,6 +570,10 @@ test("branding, stacked headers and automatic entry preserve focus and CSV", asy
   page,
 }) => {
   await authenticated(page);
+  await expect(page.locator("header img")).toHaveAttribute(
+    "src",
+    "/assets/img/logo-transparent-full.webp",
+  );
   await expect(page.locator("header img")).toBeVisible();
   await expect(page.locator("header img")).toHaveJSProperty("complete", true);
   expect(

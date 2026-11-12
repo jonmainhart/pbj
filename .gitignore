@@ -103,3 +103,6 @@ site/assets/img/logo-full.png
 *.tfplan
 /aws/terraform/tfplan
 crash.log
+# Local artwork originals; publish the optimized WebP versions.
+/site/assets/img/pbj-hero.png
+/site/assets/img/logo-transparent-full.png

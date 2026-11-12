@@ -49,6 +49,7 @@ def build_site(source_root: Path, output_dir: Path) -> None:
             or (relative.parent == Path("assets") and path.suffix in {".js", ".css"})
             or (
                 relative.parent == Path("assets/img")
+                and path.name not in {"pbj-hero.png", "logo-transparent-full.png"}
                 and path.suffix in {".png", ".jpg", ".jpeg", ".svg", ".ico", ".webp"}
             )
         ):
