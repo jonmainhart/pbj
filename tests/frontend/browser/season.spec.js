@@ -177,3 +177,35 @@ for (const historical of [false, true]) {
     ).toHaveLength(1);
   });
 }
+
+test("embedded season names render with only the season request after initialization", async ({ page }) => {
+  const requests = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (/\/data\/2026\/.*json$/.test(path)) requests.push(path);
+  });
+  await mockDashboard(page, {
+    "/data/available-weeks.json": { 2026: [1, 2, 3] },
+    "/data/2026/week03.json": week({
+      week: 3,
+      players: [player("alice", { name: "Future Alice" })],
+    }),
+    "/data/2026/season.json": {
+      season: 2026,
+      weeks_scored: [1, 2],
+      players: [
+        seasonPlayer("alice", { display_name: "Completed Nickname", weekly_wins: 1 }),
+        seasonPlayer("retired", { display_name: "Historical Participant", wins: 7 }),
+      ],
+    },
+  });
+  await page.goto("/");
+  await expect(page.locator("#week-status")).toHaveText("Week 3 In Progress");
+  expect(requests).toEqual(["/data/2026/week03.json"]);
+  await page.locator("#season-tab").click();
+  await expect(page.locator(".season-name")).toContainText([
+    "Completed Nickname", "Historical Participant",
+  ]);
+  await expect(page.locator(".season-record")).toHaveText(["8-2-0", "7-2-0"]);
+  expect(requests).toEqual(["/data/2026/week03.json", "/data/2026/season.json"]);
+});

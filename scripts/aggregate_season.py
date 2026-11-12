@@ -32,7 +32,7 @@ def aggregate_season_files(
     season_dir: Path,
 ) -> None:
     """Rebuild season.json from weekly result files."""
-    weeks = _load_week_results(
+    weeks, names_by_week = _load_week_results(
         season=season,
         season_dir=season_dir,
     )
@@ -42,11 +42,15 @@ def aggregate_season_files(
         weeks=weeks,
     )
 
+    display_names: dict[str, str] = {}
+    for week in result.weeks_scored:
+        display_names.update(names_by_week[week])
+
     season_path = season_dir / "season.json"
 
     _write_json_atomic(
         path=season_path,
-        data=_season_result_to_dict(result),
+        data=_season_result_to_dict(result, display_names),
     )
 
     logger.info(
@@ -77,11 +81,12 @@ def _parse_args() -> argparse.Namespace:
 def _load_week_results(
     season: int,
     season_dir: Path,
-) -> list[tuple[int, WeekResult]]:
+) -> tuple[list[tuple[int, WeekResult]], dict[int, dict[str, str]]]:
     """Load derived weekly results for a season."""
     if not season_dir.exists():
-        return []
+        return [], {}
 
+    names_by_week: dict[int, dict[str, str]] = {}
     weeks: list[tuple[int, WeekResult]] = []
 
     for path in sorted(season_dir.glob("week*.json")):
@@ -114,6 +119,16 @@ def _load_week_results(
         if not isinstance(raw_results, dict):
             raise ValueError(f"{path} results field must be a JSON object")
 
+        names_by_week[week_number] = {}
+        for player in data.get("players", []) or []:
+            if not isinstance(player, dict) or not isinstance(player.get("id"), str):
+                continue
+            for field in ("nickname", "name"):
+                value = player.get(field)
+                if isinstance(value, str) and value.strip():
+                    names_by_week[week_number][player["id"]] = value
+                    break
+
         weeks.append(
             (
                 week_number,
@@ -121,7 +136,7 @@ def _load_week_results(
             )
         )
 
-    return weeks
+    return weeks, names_by_week
 
 
 def _week_number_from_path(
@@ -286,21 +301,27 @@ def _required_bool(
 
 def _season_result_to_dict(
     result: SeasonResult,
+    display_names: dict[str, str],
 ) -> dict[str, Any]:
     """Convert SeasonResult into normalized JSON data."""
     return {
         "season": result.season,
         "weeks_scored": list(result.weeks_scored),
-        "players": [_season_player_to_dict(player) for player in result.players],
+        "players": [_season_player_to_dict(player, display_names) for player in result.players],
     }
 
 
 def _season_player_to_dict(
     result: SeasonPlayerResult,
+    display_names: dict[str, str],
 ) -> dict[str, Any]:
     """Convert one season player result into JSON data."""
     return {
         "player_id": result.player_id,
+        "display_name": display_names.get(
+            result.player_id,
+            " ".join(part[:1].upper() + part[1:] for part in result.player_id.split("-")),
+        ),
         "weeks_played": result.weeks_played,
         "wins": result.wins,
         "losses": result.losses,

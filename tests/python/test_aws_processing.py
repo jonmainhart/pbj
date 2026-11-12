@@ -1206,3 +1206,49 @@ def test_warm_partial_publication_recovery_budget(setup, monkeypatch):
     assert invoke("poll_games")["written"] == []
     assert reading.call_count == 1
     aggregation.assert_not_called()
+
+
+@pytest.mark.parametrize("conflict", [False, True])
+def test_poll_migrates_v1_names_once_with_conditional_recovery(
+    setup, monkeypatch, tmp_path, conflict
+):
+    from scripts import aggregate_season, score_week
+
+    s3, provider = setup
+    path = tmp_path / "week06.json"
+    path.write_text(json.dumps(weekly()))
+    score_week.score_week_file(path, 2026, 6)
+    s3.objects[WEEK_KEY] = path.read_bytes()
+    invoke("poll_games")
+    old = s3.data(SEASON_KEY)
+    for player in old["players"]:
+        player.pop("display_name")
+    s3.objects[SEASON_KEY] = json.dumps(old).encode()
+    provenance = s3.metadata[SEASON_KEY].pop(processing.POLL_SOURCES)
+    s3.metadata[SEASON_KEY]["pbj-poll-sources-v1"] = provenance
+    keys = set(s3.objects)
+    aggregate = Mock(wraps=aggregate_season.aggregate_season_files)
+    monkeypatch.setattr(aggregate_season, "aggregate_season_files", aggregate)
+    if conflict:
+        s3.fail = SEASON_KEY
+        with pytest.raises(ClientError, match="PreconditionFailed"):
+            invoke("poll_games")
+        assert "pbj-poll-sources-v1" in s3.metadata[SEASON_KEY]
+        assert s3.data(SEASON_KEY) == old
+        s3.fail = None
+        aggregate.reset_mock()
+    assert invoke("poll_games")["written"] == [SEASON_KEY]
+    aggregate.assert_called_once()
+    enriched = s3.data(SEASON_KEY)
+    assert enriched["players"]
+    assert all(p["display_name"] for p in enriched["players"])
+    for player in enriched["players"]:
+        player.pop("display_name")
+    assert enriched == old
+    assert set(s3.objects) == keys
+    assert set(s3.metadata[SEASON_KEY]) == {processing.POLL_SOURCES}
+    aggregate.reset_mock()
+    provider.reset_mock()
+    assert invoke("poll_games")["written"] == []
+    aggregate.assert_not_called()
+    provider.get_week.assert_not_called()

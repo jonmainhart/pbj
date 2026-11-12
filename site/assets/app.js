@@ -8,6 +8,7 @@ import { fetchAvailableWeeks, fetchSeason, fetchWeek } from "./data.js";
 
 import {
   getPlayerName,
+  hasSeasonDisplayName,
   loadSeasonPlayerNames,
   rememberPlayerNames,
 } from "./players.js";
@@ -243,11 +244,14 @@ async function loadSeason() {
   try {
     const data = await fetchSeason(SEASON);
 
-    await loadSeasonPlayerNames(
-      data.players ?? [],
-      data.weeks_scored ?? [],
-      (week) => fetchWeek(SEASON, week, { reuse: true }),
-    );
+    const missingNames = (data.players ?? []).filter((player) => !hasSeasonDisplayName(player));
+    if (missingNames.length) {
+      await loadSeasonPlayerNames(
+        missingNames,
+        data.weeks_scored ?? [],
+        (week) => fetchWeek(SEASON, week, { reuse: true }),
+      );
+    }
 
     seasonData = data;
     renderSeason(data, getPlayerName);

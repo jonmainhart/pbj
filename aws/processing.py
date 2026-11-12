@@ -201,7 +201,8 @@ def next_creation(s3: "S3Client", config: storage.StorageConfig) -> dict[str, ob
 
 # Provenance lives atomically on season.json, not in a separate tracking object.
 # Version the summary so changes to selection/aggregation can force reconciliation.
-POLL_SOURCES = "pbj-poll-sources-v1"
+# v2 reconciles existing season documents to include completed-week display names.
+POLL_SOURCES = "pbj-poll-sources-v2"
 
 
 def poll_games(s3: "S3Client", config: storage.StorageConfig, season: int) -> dict[str, object]:

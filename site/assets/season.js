@@ -1,5 +1,6 @@
 "use strict";
 
+import { hasSeasonDisplayName } from "./players.js";
 import { formatAccuracy } from "./format.js";
 
 export function renderSeason(data, getPlayerName) {
@@ -45,7 +46,7 @@ function createSeasonCard(player, position, getPlayerName) {
 
   const crown = position === 1 ? "👑 " : "";
 
-  name.textContent = `${crown}${position}. ${getPlayerName(player.player_id)}`;
+  name.textContent = `${crown}${position}. ${hasSeasonDisplayName(player) ? player.display_name : getPlayerName(player.player_id)}`;
 
   const record = document.createElement("div");
   record.className = "season-record";

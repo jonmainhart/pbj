@@ -123,3 +123,30 @@ test("failed name requests are evicted so subsequent discovery can retry", async
     globalThis.fetch = original;
   }
 });
+
+test("embedded names need no historical lookup, even with a conflicting current roster", async () => {
+  const n = await names();
+  n.rememberPlayerNames([player("alice", "Future Name")], 10);
+  await n.loadSeasonPlayerNames(
+    [{ player_id: "alice", display_name: "Completed Nickname" },
+      { player_id: "retired", display_name: "Historical Name" }],
+    [1, 2, 3],
+    () => assert.fail("unnecessary historical request"),
+  );
+});
+
+test("partial embedded names discover only missing names", async () => {
+  const n = await names();
+  const requests = [];
+  await n.loadSeasonPlayerNames(
+    [{ player_id: "known", display_name: "Known" },
+      { player_id: "missing", display_name: "   " }],
+    [1, 2],
+    async (week) => {
+      requests.push(week);
+      return { players: [player("missing", "Found")] };
+    },
+  );
+  assert.deepEqual(requests, [2]);
+  assert.equal(n.getPlayerName("missing"), "Found");
+});

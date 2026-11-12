@@ -425,3 +425,73 @@ def test_last_place_finishes_are_written_to_season_json(
 
     assert players["abigail"]["last_place_finishes"] == 0
     assert players["bob"]["last_place_finishes"] == 1
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_display_names_use_latest_completed_roster_in_one_read(tmp_path, monkeypatch, reverse):
+    from scripts import aggregate_season as script
+
+    documents = [_week_data(1), _week_data(2), _week_data(3, complete=False)]
+    documents[0]["players"] = [
+        {"id": "abigail", "nickname": "Old Nick", "name": "Old Name"},
+        {"id": "bob", "name": "Only Bob"},
+    ]
+    documents[1]["players"] = [
+        {"id": "abigail", "nickname": "New Nick", "name": "New Name"},
+    ]
+    documents[2]["players"] = [{"id": "abigail", "nickname": "Unpublished"}]
+    for document in documents:
+        _write_json(tmp_path / f"week{document['week']:02d}.json", document)
+    paths = list(tmp_path.glob("week*.json"))
+    monkeypatch.setattr(Path, "glob", lambda self, pattern: iter(paths[::-1] if reverse else paths))
+    from unittest.mock import Mock
+
+    read = Mock(wraps=script._load_json_object)
+    monkeypatch.setattr(script, "_load_json_object", read)
+    aggregate_season_files(2026, tmp_path)
+    first = (tmp_path / "season.json").read_bytes()
+    assert read.call_count == 3
+    data = json.loads(first)
+    assert [p["display_name"] for p in data["players"]] == ["New Nick", "Only Bob"]
+    assert data["weeks_scored"] == [1, 2]
+    assert data["players"][0]["wins"] == 24
+    aggregate_season_files(2026, tmp_path)
+    assert (tmp_path / "season.json").read_bytes() == first
+
+
+@pytest.mark.parametrize(
+    "nickname,name,expected",
+    [
+        ("Ace", "Ordinary", "Ace"),
+        ("", "Ordinary", "Ordinary"),
+        ("  ", "Ordinary", "Ordinary"),
+        (None, None, "Abigail"),
+        (12, [], "Abigail"),
+    ],
+)
+def test_unusable_names_fall_back(tmp_path, nickname, name, expected):
+    document = _week_data(1)
+    document["players"] = [{"id": "abigail", "nickname": nickname, "name": name}]
+    _write_json(tmp_path / "week01.json", document)
+    aggregate_season_files(2026, tmp_path)
+    assert _read_json(tmp_path / "season.json")["players"][0]["display_name"] == expected
+
+
+def test_single_week_participant_and_incomplete_only_player(tmp_path):
+    first = _week_data(1)
+    first["players"] = [{"id": "bob", "name": "Departed Bob"}]
+    second = _week_data(2)
+    second["results"]["players"] = second["results"]["players"][:1]
+    second["players"] = [{"id": "abigail", "name": "Latest Abigail"}]
+    future = _week_data(3, complete=False)
+    future["players"] = [{"id": "future-only", "nickname": "Private Nickname"}]
+    future["results"]["players"][0]["player_id"] = "future-only"
+    for document in (first, second, future):
+        _write_json(tmp_path / f"week{document['week']:02d}.json", document)
+    aggregate_season_files(2026, tmp_path)
+    players = {p["player_id"]: p for p in _read_json(tmp_path / "season.json")["players"]}
+    assert set(players) == {"abigail", "bob"}
+    assert players["bob"]["display_name"] == "Departed Bob"
+    assert players["bob"]["weeks_played"] == 1
+    assert players["abigail"]["display_name"] == "Latest Abigail"
+    assert players["abigail"]["weeks_played"] == 2

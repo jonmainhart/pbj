@@ -28,7 +28,9 @@ function humanizePlayerId(playerId) {
 
 /** Search newest first; stop when every season participant has an authoritative name. */
 export async function loadSeasonPlayerNames(players, weeks, fetchWeek) {
-  const unresolved = new Set(players.map((player) => player.player_id));
+  const unresolved = new Set(
+    players.filter((player) => !hasSeasonDisplayName(player)).map((player) => player.player_id),
+  );
   for (const week of [...new Set(weeks)].sort((a, b) => b - a)) {
     for (const id of unresolved) {
       if ((playerNameWeeks.get(id) ?? -1) >= week) unresolved.delete(id);
@@ -42,4 +44,8 @@ export async function loadSeasonPlayerNames(players, weeks, fetchWeek) {
       // Retain known names and continue looking for historical participants.
     }
   }
+}
+
+export function hasSeasonDisplayName(player) {
+  return typeof player.display_name === "string" && player.display_name.trim().length > 0;
 }
