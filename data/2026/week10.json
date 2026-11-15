@@ -84,7 +84,7 @@
         "name": "Green Bay Packers"
       },
       "status": "live",
-      "away_score": 27,
+      "away_score": 30,
       "home_score": 10
     },
     {
@@ -102,7 +102,7 @@
       },
       "status": "live",
       "away_score": 30,
-      "home_score": 16
+      "home_score": 23
     },
     {
       "id": "1392358",
@@ -136,7 +136,7 @@
       },
       "status": "live",
       "away_score": 10,
-      "home_score": 7
+      "home_score": 14
     },
     {
       "id": "1392360",
