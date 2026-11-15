@@ -50,7 +50,7 @@
         "name": "Atlanta Falcons"
       },
       "status": "live",
-      "away_score": 21,
+      "away_score": 28,
       "home_score": 3
     },
     {
@@ -102,7 +102,7 @@
       },
       "status": "live",
       "away_score": 23,
-      "home_score": 13
+      "home_score": 16
     },
     {
       "id": "1392358",
@@ -118,7 +118,7 @@
         "name": "Indianapolis Colts"
       },
       "status": "live",
-      "away_score": 16,
+      "away_score": 22,
       "home_score": 24
     },
     {
