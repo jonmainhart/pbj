@@ -68,7 +68,7 @@
       },
       "status": "live",
       "away_score": 24,
-      "home_score": 20
+      "home_score": 27
     },
     {
       "id": "1392356",
@@ -83,7 +83,7 @@
         "abbreviation": "GB",
         "name": "Green Bay Packers"
       },
-      "status": "live",
+      "status": "final",
       "away_score": 30,
       "home_score": 10
     },
@@ -1264,10 +1264,10 @@
       {
         "player_id": "abigail",
         "wins": 2,
-        "losses": 0,
+        "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 1.0,
+        "accuracy": 0.6666666666666666,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1275,10 +1275,10 @@
       {
         "player_id": "angie-mainhart",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1286,10 +1286,10 @@
       {
         "player_id": "atrain",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1297,10 +1297,10 @@
       {
         "player_id": "beave",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1308,21 +1308,21 @@
       {
         "player_id": "beth",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "bigstrike",
-        "wins": 1,
+        "wins": 2,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.6666666666666666,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1330,10 +1330,10 @@
       {
         "player_id": "bill-wonorski",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1341,10 +1341,10 @@
       {
         "player_id": "broskeys",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1352,10 +1352,10 @@
       {
         "player_id": "d-rell",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1363,10 +1363,10 @@
       {
         "player_id": "deacon",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1374,7 +1374,7 @@
       {
         "player_id": "don-gammon",
         "wins": 0,
-        "losses": 2,
+        "losses": 3,
         "ties": 0,
         "missed_picks": 0,
         "accuracy": 0.0,
@@ -1384,22 +1384,22 @@
       },
       {
         "player_id": "edward-g",
-        "wins": 0,
+        "wins": 1,
         "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.0,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "eli-street",
-        "wins": 1,
+        "wins": 2,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.6666666666666666,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1407,10 +1407,10 @@
       {
         "player_id": "heavy-d",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1418,7 +1418,7 @@
       {
         "player_id": "james-pbj",
         "wins": 0,
-        "losses": 2,
+        "losses": 3,
         "ties": 0,
         "missed_picks": 0,
         "accuracy": 0.0,
@@ -1429,10 +1429,10 @@
       {
         "player_id": "jeanette",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1440,10 +1440,10 @@
       {
         "player_id": "jeff-kennedy",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1451,10 +1451,10 @@
       {
         "player_id": "jenny-d",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1462,7 +1462,7 @@
       {
         "player_id": "jenny-d-husband",
         "wins": 0,
-        "losses": 2,
+        "losses": 3,
         "ties": 0,
         "missed_picks": 0,
         "accuracy": 0.0,
@@ -1473,10 +1473,10 @@
       {
         "player_id": "john-b3",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1484,32 +1484,32 @@
       {
         "player_id": "john-perry-jr",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "jozies",
-        "wins": 0,
+        "wins": 1,
         "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.0,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "julie-g",
-        "wins": 0,
+        "wins": 1,
         "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.0,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1517,7 +1517,7 @@
       {
         "player_id": "karlee",
         "wins": 0,
-        "losses": 2,
+        "losses": 3,
         "ties": 0,
         "missed_picks": 0,
         "accuracy": 0.0,
@@ -1528,10 +1528,10 @@
       {
         "player_id": "kass",
         "wins": 2,
-        "losses": 0,
+        "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 1.0,
+        "accuracy": 0.6666666666666666,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1539,10 +1539,10 @@
       {
         "player_id": "kelly-b",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1550,10 +1550,10 @@
       {
         "player_id": "keri",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1561,10 +1561,10 @@
       {
         "player_id": "kolton",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1572,21 +1572,21 @@
       {
         "player_id": "kramer",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "little-foot",
-        "wins": 1,
+        "wins": 2,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.6666666666666666,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1594,7 +1594,7 @@
       {
         "player_id": "liz-gammon",
         "wins": 0,
-        "losses": 2,
+        "losses": 3,
         "ties": 0,
         "missed_picks": 0,
         "accuracy": 0.0,
@@ -1605,32 +1605,32 @@
       {
         "player_id": "mac",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "mafia",
-        "wins": 1,
+        "wins": 2,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.6666666666666666,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "matt-a",
-        "wins": 0,
+        "wins": 1,
         "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.0,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1638,21 +1638,21 @@
       {
         "player_id": "mr-angie",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "nick-g",
-        "wins": 0,
+        "wins": 1,
         "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.0,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1660,10 +1660,10 @@
       {
         "player_id": "nick-s",
         "wins": 2,
-        "losses": 0,
+        "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 1.0,
+        "accuracy": 0.6666666666666666,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1671,10 +1671,10 @@
       {
         "player_id": "nina-perry",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1682,21 +1682,21 @@
       {
         "player_id": "richard",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "robert-h",
-        "wins": 1,
+        "wins": 2,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.6666666666666666,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1704,7 +1704,7 @@
       {
         "player_id": "shawna",
         "wins": 0,
-        "losses": 2,
+        "losses": 3,
         "ties": 0,
         "missed_picks": 0,
         "accuracy": 0.0,
@@ -1715,21 +1715,21 @@
       {
         "player_id": "shorty",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
       },
       {
         "player_id": "steff",
-        "wins": 1,
+        "wins": 2,
         "losses": 1,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.6666666666666666,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1737,10 +1737,10 @@
       {
         "player_id": "talishious",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1748,10 +1748,10 @@
       {
         "player_id": "tom-elwell",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
@@ -1759,10 +1759,10 @@
       {
         "player_id": "tommy-shawnas-hubby",
         "wins": 1,
-        "losses": 1,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.5,
+        "accuracy": 0.3333333333333333,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
