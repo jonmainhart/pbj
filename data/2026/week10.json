@@ -169,7 +169,7 @@
         "name": "Las Vegas Raiders"
       },
       "status": "live",
-      "away_score": 0,
+      "away_score": 7,
       "home_score": 7
     },
     {
@@ -186,7 +186,7 @@
         "name": "Arizona Cardinals"
       },
       "status": "live",
-      "away_score": 0,
+      "away_score": 3,
       "home_score": 3
     },
     {
@@ -202,9 +202,9 @@
         "abbreviation": "DAL",
         "name": "Dallas Cowboys"
       },
-      "status": "scheduled",
-      "away_score": null,
-      "home_score": null
+      "status": "live",
+      "away_score": 0,
+      "home_score": 0
     },
     {
       "id": "1392364",
