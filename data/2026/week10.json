@@ -1052,7 +1052,7 @@
         "1392361": "SEA",
         "1392362": "LAR",
         "1392363": "SF",
-        "1392364": "PIT",
+        "1392364": "CIN",
         "1392365": "BAL"
       },
       "tiebreaker": 41.0
@@ -1659,11 +1659,11 @@
       },
       {
         "player_id": "nick-s",
-        "wins": 10,
-        "losses": 3,
+        "wins": 11,
+        "losses": 2,
         "ties": 0,
         "missed_picks": 0,
-        "accuracy": 0.7692307692307693,
+        "accuracy": 0.8461538461538461,
         "tiebreaker_distance": null,
         "weekly_rank": null,
         "weekly_winner": false
