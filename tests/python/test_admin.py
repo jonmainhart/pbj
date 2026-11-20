@@ -16,9 +16,11 @@ from aws.admin_csv import inspect_csv
 from pbj.importers.numbers import import_players
 from pbj.week_data import load_games, parse_games
 
+WEEK_FIXTURE = Path(__file__).parent / "fixtures" / "admin_week.json"
+
 
 def test_empty_headers_follow_schedule():
-    games = load_games(Path("data/2026/week01.json"))
+    games = load_games(WEEK_FIXTURE)
     result = inspect_csv("", games)
     assert result["headers"][0] == "NAME"
     assert result["headers"][-1] == "TIEBREAKER"
@@ -27,7 +29,7 @@ def test_empty_headers_follow_schedule():
 
 
 def test_correctable_cells_and_duplicate_ids():
-    games = load_games(Path("data/2026/week01.json"))[:1]
+    games = load_games(WEEK_FIXTURE)[:1]
     result = inspect_csv("NAME,NE SEA,TIEBREAKER\nJosé,BAD,nan\nJose,N/P,3\n", games)
     assert {issue["column"] for issue in result["issues"]} >= {0, 1, 2}
     assert any(issue["severity"] == "warning" for issue in result["issues"])
@@ -35,14 +37,14 @@ def test_correctable_cells_and_duplicate_ids():
 
 
 def test_aliases_and_importer_compatibility():
-    games = load_games(Path("data/2026/week01.json"))[:1]
+    games = load_games(WEEK_FIXTURE)[:1]
     result = inspect_csv("Title\nNAME,NE SEA,TIEBREAKER,CORRECT\nAlice,SEA,30,0\n", games)
     assert not [issue for issue in result["issues"] if issue["severity"] == "error"]
     assert import_players(StringIO(result["csv"]), games)[0].name == "Alice"
 
 
 def test_missing_schedule_columns_and_malformed_rows():
-    games = load_games(Path("data/2026/week01.json"))[:1]
+    games = load_games(WEEK_FIXTURE)[:1]
     result = inspect_csv("NAME,BOGUS,TIEBREAKER\nAlice,SEA,30,extra\n", games)
     assert len(result["issues"]) >= 2
 
@@ -74,7 +76,7 @@ def setup_api(monkeypatch):
     monkeypatch.setenv("PBJ_PROCESSOR_FUNCTION", "pbj-processor")
     client = MagicMock()
     monkeypatch.setattr(storage, "client", lambda: client)
-    schedule = storage.Snapshot(Path("data/2026/week01.json").read_bytes(), "schedule")
+    schedule = storage.Snapshot(WEEK_FIXTURE.read_bytes(), "schedule")
     monkeypatch.setattr(
         storage, "read", lambda s, c, k, **kw: schedule if k.endswith(".json") else None
     )
@@ -168,7 +170,7 @@ def test_submission_blocks_invalid_and_empty(monkeypatch):
 
 
 def valid_csv():
-    games = load_games(Path("data/2026/week01.json"))
+    games = load_games(WEEK_FIXTURE)
     headers = inspect_csv("", games)["headers"]
     return ",".join(headers) + "\nAlice," + ",".join(g.home.abbreviation for g in games) + ",30\n"
 
@@ -315,7 +317,7 @@ def test_draft_reopens_csv_with_version(monkeypatch):
 def test_matchup_aliases_match_existing_importer():
     from dataclasses import replace
 
-    game = load_games(Path("data/2026/week01.json"))[0]
+    game = load_games(WEEK_FIXTURE)[0]
     game = replace(
         game,
         away=replace(game.away, abbreviation="JAX"),
@@ -331,10 +333,10 @@ def test_open_week_reads_s3_draft_and_distinguishes_errors(monkeypatch):
     real_read = storage.read
     client = setup_api(monkeypatch)
     monkeypatch.setattr(storage, "read", real_read)
-    raw = json.loads(Path("data/2026/week01.json").read_text())
+    raw = json.loads(WEEK_FIXTURE.read_text())
     raw["players"] = []
     schedule = json.dumps(raw).encode()
-    games = load_games(Path("data/2026/week01.json"))
+    games = load_games(WEEK_FIXTURE)
     expected_headers = [
         "NAME",
         *[f"{g.away.abbreviation} {g.home.abbreviation}" for g in games],
@@ -414,11 +416,11 @@ def test_private_listing_permission_is_limited_to_csv_key_patterns():
 
 def test_verified_identity_and_schedule_orientation_are_exposed(monkeypatch):
     s3, _, _ = creation_api(monkeypatch)
-    s3.objects["data/2026/week01.json"] = Path("data/2026/week01.json").read_bytes()
+    s3.objects["data/2026/week01.json"] = WEEK_FIXTURE.read_bytes()
     catalog = json.loads(admin.lambda_handler(event("/schedules"), None)["body"])
     assert catalog["user_id"] == "commissioner"
     body = json.loads(admin.lambda_handler(event(), None)["body"])
-    games = load_games(Path("data/2026/week01.json"))
+    games = load_games(WEEK_FIXTURE)
     assert body["games"] == [
         dict(id=g.id, away=g.away.abbreviation, home=g.home.abbreviation) for g in games
     ]
@@ -430,7 +432,7 @@ def test_verified_identity_and_schedule_orientation_are_exposed(monkeypatch):
 
 
 def test_reversed_matchup_csv_preserves_game_association():
-    games = load_games(Path("data/2026/week01.json"))[:1]
+    games = load_games(WEEK_FIXTURE)[:1]
     game = games[0]
     text = (
         f"NAME,{game.home.abbreviation} {game.away.abbreviation},TIEBREAKER\n"
@@ -445,8 +447,8 @@ def test_reversed_matchup_csv_preserves_game_association():
 
 def published_week(monkeypatch, players=None, draft=None):
     client = setup_api(monkeypatch)
-    raw = json.loads(Path("data/2026/week01.json").read_text())
-    games = load_games(Path("data/2026/week01.json"))
+    raw = json.loads(WEEK_FIXTURE.read_text())
+    games = load_games(WEEK_FIXTURE)
     raw["players"] = (
         players
         if players is not None
@@ -527,7 +529,7 @@ def test_no_published_players_stays_blank(monkeypatch):
 
 
 def test_malformed_published_players_return_useful_error(monkeypatch):
-    game_id = load_games(Path("data/2026/week01.json"))[0].id
+    game_id = load_games(WEEK_FIXTURE)[0].id
     cases: list[Any] = [
         None,
         {},
@@ -562,7 +564,7 @@ def test_malformed_published_players_return_useful_error(monkeypatch):
 
 def test_existing_fixture_players_follow_reordered_schedule(monkeypatch):
     client = setup_api(monkeypatch)
-    raw = json.loads(Path("data/2026/week01.json").read_text())
+    raw = json.loads(WEEK_FIXTURE.read_text())
     raw["games"].reverse()
     monkeypatch.setattr(
         storage,
@@ -574,7 +576,7 @@ def test_existing_fixture_players_follow_reordered_schedule(monkeypatch):
     result = admin.lambda_handler(event(), None)
     assert result["statusCode"] == 200
     body = json.loads(result["body"])
-    games = list(reversed(load_games(Path("data/2026/week01.json"))))
+    games = list(reversed(load_games(WEEK_FIXTURE)))
     assert body["headers"] == inspect_csv("", games)["headers"]
     players = import_players(StringIO(body["csv"]), games)
     assert [(p.name, p.picks, p.tiebreaker) for p in players] == [
@@ -902,7 +904,7 @@ def test_portal_api_runs_authorized_creation_or_publication(
     s3.objects["incoming/2026/week02.csv"] = b"submitted"
     before = dict(s3.objects)
     provider = MagicMock()
-    provider.get_week.return_value = load_games(Path("data/2026/week01.json"))
+    provider.get_week.return_value = load_games(WEEK_FIXTURE)
     monkeypatch.setattr(processing, "provider", lambda: provider)
     catalog = json.loads(admin.lambda_handler(event("/schedules"), None)["body"])
     target = catalog["next_creation"]
@@ -1232,7 +1234,7 @@ def test_announcement_existing_direct_read_does_not_list(monkeypatch):
 @pytest.mark.parametrize("source", ["empty", "published", "draft"])
 def test_bootstrap_reuses_week_contract_and_reads_only_current_week(monkeypatch, source):
     s3, _, processor = creation_api(monkeypatch)
-    raw = json.loads(Path("data/2026/week01.json").read_bytes())
+    raw = json.loads(WEEK_FIXTURE.read_bytes())
     if source == "empty":
         raw["players"] = []
     s3.seed("data/2026/week01.json", raw)

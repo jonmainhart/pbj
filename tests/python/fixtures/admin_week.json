@@ -1,0 +1,53 @@
+{
+  "season": 2026,
+  "week": 1,
+  "games": [
+    {
+      "id": "401872656",
+      "scheduled_time": "2026-09-10T00:20:00+00:00",
+      "away": {
+        "id": "17",
+        "abbreviation": "NE",
+        "name": "New England Patriots"
+      },
+      "home": {
+        "id": "26",
+        "abbreviation": "SEA",
+        "name": "Seattle Seahawks"
+      },
+      "status": "final",
+      "away_score": 10,
+      "home_score": 13
+    },
+    {
+      "id": "401872657",
+      "scheduled_time": "2026-09-11T00:35:00+00:00",
+      "away": {
+        "id": "25",
+        "abbreviation": "SF",
+        "name": "San Francisco 49ers"
+      },
+      "home": {
+        "id": "14",
+        "abbreviation": "LAR",
+        "name": "Los Angeles Rams"
+      },
+      "status": "final",
+      "away_score": 27,
+      "home_score": 7
+    }
+  ],
+  "lock_time": "2026-09-09T23:20:00+00:00",
+  "players": [
+    {
+      "id": "alice",
+      "name": "Alice",
+      "nickname": null,
+      "picks": {
+        "401872656": "SEA",
+        "401872657": "LAR"
+      },
+      "tiebreaker": 42
+    }
+  ]
+}
