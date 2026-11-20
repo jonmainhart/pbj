@@ -5,7 +5,7 @@ export default [
     { ignores: ["build/**", "playwright-report/**", "test-results/**"] },
     js.configs.recommended,
     {
-        files: ["assets/**/*.js"],
+        files: ["site/assets/**/*.js"],
         languageOptions: { globals: globals.browser },
     },
     {

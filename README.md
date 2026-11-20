@@ -1,72 +1,75 @@
 # PBJ Dashboard
 
-PBJ Dashboard is a lightweight, mobile-friendly dashboard for our weekly football pool.
+PBJ is a mobile-friendly dashboard for a weekly football pool. It imports the
+commissioner's picks, retrieves NFL schedules and scores, and displays weekly
+and season results. Players can view the dashboard without an account; the
+commissioner portal requires an authorized account. See [pool rules](RULES.md).
 
-The commissioner's spreadsheet remains the source for player picks. PBJ imports those picks, updates NFL game results, calculates weekly and season standings, and publishes everything through a public website.
+## Repository and production
 
-No player accounts, online pick submission, or database are required.
+- `site/` contains the static dashboard and commissioner portal.
+- `src/pbj/` contains Python domain logic; `scripts/` provides reusable processing and build commands.
+- `aws/` contains the Lambda integration, deployment tooling, and Terraform configuration.
+- `tests/` contains Python and frontend tests.
 
-## What It Does
+CloudFront serves the static frontend and operational data stored in S3. AWS
+Lambda handles backend processing and the commissioner API. Application source
+is maintained in Git; operational data is authoritative in S3 and is not part
+of the repository or static build. The static build generates public documents
+from their source files and does not upload or replace operational data.
 
-- Creates the weekly NFL schedule.
-- Imports player picks from CSV.
-- Updates game scores and statuses.
-- Calculates weekly results and winners.
-- Applies the Monday night tiebreaker.
-- Tracks season standings and statistics.
-- Shows mathematical elimination during incomplete weeks.
-- Publishes results through GitHub Pages.
+## Local development
 
-Routine production processing is automated with GitHub Actions.
+Use Python 3.11 or later and a Node version supported by `package.json`:
 
-## Pool Rules
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install '.[dev,aws]'
+npm ci
+npx playwright install chromium
+npm run build:admin
+python -m scripts.build_site
+python -m http.server 8000 --bind 127.0.0.1 --directory build/site
+```
 
-See [Pool Rules](RULES.md) for:
+Open `http://127.0.0.1:8000/` to preview static assets and generated documents.
+A functioning dashboard needs separately supplied operational data or mocked
+responses, as in the frontend tests; production retrieves data through CloudFront
+and S3. The local static shell has no live commissioner configuration; browser
+tests mock the API. Reinstall the Python
+package after changing its source or dependencies because the install is not
+editable. Tests use fixtures and mocked services without AWS credentials.
 
-- Weekly scoring
-- Weekly rankings and winners
-- Monday night tiebreakers
-- Season standings
-- Mathematical elimination
-- Dashboard status indicators
+```bash
+ruff check .
+ruff format --check .
+mypy src scripts aws tests/python
+pytest
+npm run lint
+npm run test:unit
+npm run test:browser
+bash aws/check-terraform.sh
+```
 
-`RULES.md` is the source of truth for pool rules displayed by the dashboard.
+## Deployment and recovery
 
-The dashboard's footer includes a Rules control that opens the complete rules
-without leaving the current view.
+`main` is the authoritative deployment branch. A push to `main` or a manual
+run of [AWS infrastructure and deployment](.github/workflows/terraform.yml)
+on `main` runs quality checks, validates and applies an approved Terraform
+plan, then calls [Deploy AWS application](.github/workflows/deploy-aws.yml) to
+publish Lambda code and static assets. Review workflow results after deployment.
+The local Terraform check does not use remote state.
 
-## Dashboard
-
-The public site provides weekly and season views, game progress, player picks, weekly winners, tiebreaker results, season statistics, and announcements.
-
-The weekly view can be displayed by player or by game.
-
-During an incomplete week, players still in contention appear ahead of mathematically eliminated players.
-
-## Weekly Workflow
-
-1. PBJ creates the week's NFL schedule.
-2. The commissioner enters picks and sends the completed CSV.
-3. The CSV is added to the repository.
-4. PBJ imports and publishes the picks.
-5. Scores and game statuses update automatically.
-6. Weekly and season results update as games become final.
-
-Invalid CSV imports do not replace existing player data.
-
-Generated weekly data is stored under `data/<season>/`.
-
-## Development
-
-See [DEVELOPMENT.md](DEVELOPMENT.md) for architecture, data ownership, scoring implementation, game-data providers, automation, testing, and local development.
+For deployment failures, inspect the Actions run and Lambda logs. After an
+uncertain commissioner submission, allow processing to finish and inspect the
+published results before retrying the same input. For a bad release, deploy a
+reviewed correction or rollback through the normal workflow; inspect operational
+data and backups before attempting data recovery. Static uploads do not delete
+stale objects.
 
 ## License
 
-PBJ Dashboard source code and project documentation are licensed under the Apache License 2.0.
-
-Pool participant data and PBJ artwork and branding are excluded from that license. Third-party sports data, team identifiers, trademarks, and other third-party material remain subject to their respective rights.
-
-See [LICENSE](LICENSE) and [LICENSE-SCOPE.md](LICENSE-SCOPE.md) for details.
-
-The dashboard footer opens the Apache 2.0 license and Data & artwork terms
-without leaving the current view.
+Source and project documentation use the [Apache License 2.0](LICENSE).
+Participant data, PBJ artwork and branding, and third-party material have
+separate terms; see [license scope](LICENSE-SCOPE.md) and [legal notices](LEGAL.md).

@@ -12,10 +12,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+aws = [
+    "boto3>=1.37.32,<2",
+]
 docs = [
     "markdown-it-py>=3,<5",
 ]
 dev = [
+    "boto3-stubs[s3,lambda]>=1.37.32,<2",
     "markdown-it-py>=3,<5",
     "mypy>=1.17,<2",
     "pytest>=8,<9",
@@ -26,9 +30,11 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/python"]
+pythonpath = ["."]
 addopts = [
     "-ra",
+    "--import-mode=importlib",
     "--strict-markers",
 ]
 markers = [
@@ -68,7 +74,8 @@ warn_unreachable = true
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = "tests.*"
+# tests/python is the package root now that tests/ has no package marker.
+module = "python.*"
 disallow_untyped_defs = false
 disallow_untyped_calls = false
 disallow_incomplete_defs = false
