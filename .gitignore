@@ -106,3 +106,5 @@ crash.log
 # Local artwork originals; publish the optimized WebP versions.
 /site/assets/img/pbj-hero.png
 /site/assets/img/logo-transparent-full.png
+# Operational data is authoritative in S3
+/data/
