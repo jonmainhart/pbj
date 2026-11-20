@@ -63,10 +63,8 @@ jobs:
                   frontend = build = True
               elif path in {'RULES.md', 'LEGAL.md', 'LICENSE', 'LICENSE-SCOPE.md'}:
                   frontend = build = True
-              elif path.endswith('.md') or path in {'LICENSE', 'CNAME', 'manifest.webmanifest'}:
+              elif path.endswith('.md') or path in {'LICENSE', 'manifest.webmanifest'}:
                   build = True
-              elif path.startswith('data/') and path.endswith(('.json', '.csv')):
-                  pass
               elif path.startswith('site/'):
                   frontend = build = True
               else:

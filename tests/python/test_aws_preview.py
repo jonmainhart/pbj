@@ -74,7 +74,6 @@ def test_upload_only_public_static_files(tmp_path):
     for name in ("apple-touch-icon.png", "logo-192x192.png", "logo-512x512.png", "favicon.png"):
         assert headers[f"assets/img/{name}"]["ContentType"] == "image/png"
     assert headers["assets/app.js"]["ContentType"] in {"text/javascript", "application/javascript"}
-    assert (artifact / "CNAME").exists()
 
 
 def test_origin_configuration_and_access_boundaries():

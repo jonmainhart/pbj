@@ -28,8 +28,8 @@ import pytest
         (".github/workflows/deploy-aws.yml", (True, True, True)),
         ("pyproject.toml", (True, True, True)),
         ("package.json", (True, True, True)),
-        ("data/2026/week01.json", (False, False, False)),
-        ("data/2026/week01.csv", (False, False, False)),
+        ("data/2026/week01.json", (True, True, True)),
+        ("data/2026/week01.csv", (True, True, True)),
     ],
 )
 def test_quality_selection(path, expected, tmp_path, monkeypatch):

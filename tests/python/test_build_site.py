@@ -19,10 +19,8 @@ def test_site_contains_public_assets_but_not_operational_or_development_files(
     source = tmp_path / "source"
     source.mkdir()
     (source / "site").mkdir()
-    for name in ("index.html", "CNAME", "manifest.webmanifest", "LICENSE", "LICENSE-SCOPE.md"):
-        directory = (
-            source / "site" if name in {"index.html", "CNAME", "manifest.webmanifest"} else source
-        )
+    for name in ("index.html", "manifest.webmanifest", "LICENSE", "LICENSE-SCOPE.md"):
+        directory = source / "site" if name in {"index.html", "manifest.webmanifest"} else source
         (directory / name).write_text(name, encoding="utf-8")
     for name, content in LICENSE_SOURCES.items():
         (source / name).write_text(content, encoding="utf-8")
@@ -88,10 +86,8 @@ def test_build_replaces_stale_site_files_on_rebuild(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.mkdir()
     (source / "site").mkdir()
-    for name in ("index.html", "CNAME", "manifest.webmanifest", "LICENSE", "LICENSE-SCOPE.md"):
-        directory = (
-            source / "site" if name in {"index.html", "CNAME", "manifest.webmanifest"} else source
-        )
+    for name in ("index.html", "manifest.webmanifest", "LICENSE", "LICENSE-SCOPE.md"):
+        directory = source / "site" if name in {"index.html", "manifest.webmanifest"} else source
         (directory / name).touch()
     for name, content in LICENSE_SOURCES.items():
         (source / name).write_text(content, encoding="utf-8")

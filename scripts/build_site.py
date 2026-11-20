@@ -8,7 +8,7 @@ from pathlib import Path
 from scripts.generate_documents import DOCUMENTS, generate_documents
 
 ROOT = Path(__file__).resolve().parents[1]
-SITE_FILES = ("index.html", "manifest.webmanifest", "CNAME")
+SITE_FILES = ("index.html", "manifest.webmanifest")
 PUBLIC_FILES = (
     "RULES.md",
     "LICENSE",

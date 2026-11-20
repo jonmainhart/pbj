@@ -43,15 +43,12 @@ def test_public_build_retains_legal_source_and_generates_presentation(tmp_path: 
     (source / "site").mkdir()
     for name in (
         "index.html",
-        "CNAME",
         "manifest.webmanifest",
         "RULES.md",
         "LICENSE",
         "LICENSE-SCOPE.md",
     ):
-        directory = (
-            source / "site" if name in {"index.html", "CNAME", "manifest.webmanifest"} else source
-        )
+        directory = source / "site" if name in {"index.html", "manifest.webmanifest"} else source
         (directory / name).write_text("Fixture content\n", encoding="utf-8")
     (source / "LEGAL.md").write_text(NOTICE, encoding="utf-8")
     (source / "site" / "assets" / "documents").mkdir(parents=True)
