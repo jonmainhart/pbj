@@ -21,7 +21,15 @@ def test_upload_only_public_static_files(tmp_path):
     (artifact / "incoming/private.json").write_text("{}")
     (artifact / "terraform").mkdir()
     (artifact / "terraform/private.json").write_text("{}")
-    (artifact / "data/announcements.json").write_text("{}")
+    assert not (artifact / "data").exists()
+    (artifact / "data/2026").mkdir(parents=True)
+    for name in (
+        "available-weeks.json",
+        "announcements.json",
+        "2026/week01.json",
+        "2026/season.json",
+    ):
+        (artifact / "data" / name).write_text("{}")
     (artifact / "assets/admin-config.json").write_text("{}")
     (artifact / "BALLDONTLIE.key").write_text("secret")
     calls = []
@@ -67,7 +75,6 @@ def test_upload_only_public_static_files(tmp_path):
         assert headers[f"assets/img/{name}"]["ContentType"] == "image/png"
     assert headers["assets/app.js"]["ContentType"] in {"text/javascript", "application/javascript"}
     assert (artifact / "CNAME").exists()
-    assert (artifact / "data/available-weeks.json").exists()
 
 
 def test_origin_configuration_and_access_boundaries():

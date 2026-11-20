@@ -1,8 +1,7 @@
-"""Stage public static files and freshly generated documents for GitHub Pages."""
+"""Stage public static files and freshly generated documents."""
 
 import argparse
 import logging
-import re
 import shutil
 from pathlib import Path
 
@@ -16,7 +15,6 @@ PUBLIC_FILES = (
     "LICENSE-SCOPE.md",
     "LEGAL.md",
 )
-WEEKLY_DATA = re.compile(r"(?:week\d{2}|season)\.json")
 
 
 def build_site(source_root: Path, output_dir: Path) -> None:
@@ -57,19 +55,6 @@ def build_site(source_root: Path, output_dir: Path) -> None:
         target = output_dir / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, target)
-    data_root = source_root / "data"
-    for path in data_root.rglob("*.json"):
-        if not path.is_file() or path.resolve() != path:
-            continue
-        relative = path.relative_to(data_root)
-        if relative == Path("available-weeks.json") or (
-            len(relative.parts) == 2
-            and relative.parts[0].isdecimal()
-            and WEEKLY_DATA.fullmatch(relative.name)
-        ):
-            target = output_dir / "data" / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, target)
     generate_documents(source_root, output_dir / "assets" / "documents", DOCUMENTS)
 
 

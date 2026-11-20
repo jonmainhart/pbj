@@ -13,7 +13,7 @@ LICENSE_SOURCES = {
 
 
 @pytest.mark.smoke
-def test_site_contains_public_assets_and_json_but_not_private_or_development_files(
+def test_site_contains_public_assets_but_not_operational_or_development_files(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "source"
@@ -45,6 +45,7 @@ def test_site_contains_public_assets_and_json_but_not_private_or_development_fil
     (source / "data" / "available-weeks.json").write_text("{}", encoding="utf-8")
     (source / "data" / "announcements.json").write_text("{}", encoding="utf-8")
     (source / "data" / "2026" / "week01.json").write_text("{}", encoding="utf-8")
+    (source / "data" / "2026" / "season.json").write_text("{}", encoding="utf-8")
     (source / "data" / "2026" / "week01.csv").write_text("private import", encoding="utf-8")
     (source / "data" / "raw").mkdir()
     (source / "data" / "raw" / "provider.json").write_text("raw", encoding="utf-8")
@@ -64,8 +65,7 @@ def test_site_contains_public_assets_and_json_but_not_private_or_development_fil
             "leaked.js",
         ):
             assert not (directory / name).exists()
-    assert (output / "data" / "2026" / "week01.json").exists()
-    assert (output / "data" / "available-weeks.json").exists()
+    assert not (output / "data").exists()
     assert "Canonical rules." in (output / "assets" / "documents" / "rules.html").read_text()
     documents = output / "assets" / "documents"
     assert (documents / "license.html").is_file()
@@ -98,11 +98,11 @@ def test_build_replaces_stale_site_files_on_rebuild(tmp_path: Path) -> None:
     (source / "LEGAL.md").write_text("# Legal Notice\n\nFixture legal notice.\n", encoding="utf-8")
     (source / "RULES.md").write_text("# Rules\n", encoding="utf-8")
     (source / "site" / "assets").mkdir()
-    (source / "data").mkdir()
     output = tmp_path / "site"
     output.mkdir()
     (output / "stale.html").touch()
 
+    assert not (source / "data").exists()
     build_site(source, output)
 
     assert not (output / "stale.html").exists()
@@ -131,9 +131,6 @@ def test_build_rejects_output_that_contains_source(tmp_path: Path) -> None:
     [
         *(f"site/{name}" for name in SITE_FILES),
         *PUBLIC_FILES,
-        "data/available-weeks.json",
-        "data/2026/week01.json",
-        "data/2026/season.json",
     ],
 )
 def test_build_does_not_publish_symlinked_sources(tmp_path: Path, name: str) -> None:
@@ -152,11 +149,6 @@ def test_build_does_not_publish_symlinked_sources(tmp_path: Path, name: str) -> 
     linked.symlink_to(private)
     output = tmp_path / "output"
 
-    if name.startswith("data/"):
+    with pytest.raises(ValueError, match="symlink"):
         build_site(source, output)
-        assert not (output / name).exists()
-        assert (output / "index.html").read_text() == "Public content"
-    else:
-        with pytest.raises(ValueError, match="symlink"):
-            build_site(source, output)
-        assert not output.exists()
+    assert not output.exists()
