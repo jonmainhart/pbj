@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   deploy:
-    if: github.ref == 'refs/heads/test/aws-upgrade'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: pbj-aws-deploy
     timeout-minutes: 20

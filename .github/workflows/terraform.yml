@@ -2,7 +2,7 @@ name: AWS infrastructure and deployment
 
 on:
   push:
-    branches: [test/aws-upgrade]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   quality:
-    if: github.ref == 'refs/heads/test/aws-upgrade'
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/quality.yml
   terraform:
     needs: quality
