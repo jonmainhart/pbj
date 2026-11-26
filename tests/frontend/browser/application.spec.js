@@ -88,7 +88,7 @@ test("refresh updates changed data, preserves unchanged cards, and retains data 
   await processed(1);
   let completed = 1;
   const refresh = async () => {
-    await page.clock.runFor(60_000);
+    await page.clock.runFor(15_000);
     await processed(++completed);
   };
   await refresh();
@@ -118,7 +118,7 @@ test("refresh is suspended while a player card is open", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /alex/ }).click();
   current = week({ players: [player("beth")] });
-  await page.clock.runFor(60_000);
+  await page.clock.runFor(15_000);
   expect(requests).toBe(1);
   await expect(page.locator(".player-card-overlay .player-name")).toHaveText(
     "alex",
@@ -127,7 +127,7 @@ test("refresh is suspended while a player card is open", async ({ page }) => {
   const response = page.waitForResponse((r) =>
     r.url().endsWith("/week01.json"),
   );
-  await page.clock.runFor(60_000);
+  await page.clock.runFor(15_000);
   await response;
   await expect(page.locator("#player-list .player-name")).toHaveText("beth");
 });
@@ -227,11 +227,11 @@ for (const initial of ["", "?week=7", "?week=9"]) {
     await page.locator("#week-select option").first().evaluate((option) => {
       option.dataset.marker = "original";
     });
-    await page.clock.runFor(60_000);
+    await page.clock.runFor(15_000);
     await processed(2);
     await expect(page.locator("#week-select option").first()).toHaveAttribute("data-marker", "original");
     weeks = [10, 7, 9, 10];
-    await page.clock.runFor(60_000);
+    await page.clock.runFor(15_000);
     await processed(3);
     await expect(page.locator("#week-select option")).toHaveText(["7", "9", "10"]);
     const expected = selected === "7" ? "7" : "10";
@@ -247,7 +247,7 @@ for (const initial of ["", "?week=7", "?week=9"]) {
       Object.defineProperty(document, "hidden", { configurable: true, value: true });
       document.dispatchEvent(new Event("visibilitychange"));
     });
-    await page.clock.runFor(120_000);
+    await page.clock.runFor(30_000);
     await expect(page.locator("#week-select option")).toHaveCount(3);
     await page.evaluate(() => {
       Object.defineProperty(document, "hidden", { configurable: true, value: false });
@@ -273,21 +273,21 @@ test("publication failures preserve the display and open cards defer advancement
   let count = 1;
   for (const invalid of [null, {}, { 2026: [] }, { 2026: ["10"] }]) {
     manifest = invalid;
-    await page.clock.runFor(60_000);
+    await page.clock.runFor(15_000);
     await processed(++count);
   }
   manifest = { 2026: [9, 10] };
-  await page.clock.runFor(60_000);
+  await page.clock.runFor(15_000);
   await processed(count + 1);
   await expect(page.locator("#week-select")).toHaveValue("9");
   await expect(page.locator("#week-status")).toHaveText("Week 9 In Progress");
   await expect(page).toHaveURL(/week=9$/);
   published = week({ week: 10, players: [player("beth")] });
   await page.getByRole("button", { name: /alex/ }).click();
-  await page.clock.runFor(60_000);
+  await page.clock.runFor(15_000);
   await expect(page.locator(".player-card-overlay .player-name")).toHaveText("alex");
   await page.keyboard.press("Escape");
-  await page.clock.runFor(60_000);
+  await page.clock.runFor(15_000);
   await expect(page.locator("#week-select")).toHaveValue("10");
   await expect(page.locator("#player-list .player-name")).toHaveText("beth");
 });
@@ -315,9 +315,9 @@ test("overlapping publication refreshes cannot overwrite manual navigation", asy
   });
   weeks = [7, 9, 10];
   const requested = page.waitForRequest("**/week10.json");
-  await page.clock.runFor(60_000);
+  await page.clock.runFor(15_000);
   await requested;
-  await page.clock.runFor(120_000);
+  await page.clock.runFor(30_000);
   await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
   expect(manifests).toBe(2);
   await page.locator("#week-select").selectOption("7");

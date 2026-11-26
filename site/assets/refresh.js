@@ -1,6 +1,6 @@
 "use strict";
 
-const REFRESH_INTERVAL_MS = 60 * 1000;
+const REFRESH_INTERVAL_MS = 15 * 1000;
 
 export function initializeAutoRefresh(refresh) {
   window.setInterval(() => {
