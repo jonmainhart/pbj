@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { initializeAutoRefresh } from "../../../site/assets/refresh.js";
 
-test("refresh runs each minute only when visible, and on returning to the page", (t) => {
+test("refresh runs every 15 seconds only when visible, and on returning to the page", (t) => {
   let intervalCallback;
   let visibilityCallback;
   const document = {
@@ -28,7 +28,7 @@ test("refresh runs each minute only when visible, and on returning to the page",
   });
   globalThis.window = {
     setInterval(callback, delay) {
-      assert.equal(delay, 60_000);
+      assert.equal(delay, 15_000);
       intervalCallback = callback;
     },
   };
