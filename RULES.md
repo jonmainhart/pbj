@@ -20,7 +20,7 @@ If players have the same number of wins, the closest Monday night total breaks t
 Weekly winners and rankings are determined once all games are final.
 
 ## Elimination
-**You appear below the ``Eliminated`` line when there's no possible way for you to finish tied for the most wins.**
+**You appear below the ``Loser Zone`` line when there's no possible way for you to finish tied for the most wins.**
 
 PBJ considers everyone's remaining picks, not just how many games are left.
 
@@ -53,4 +53,4 @@ Weekly wins and last-place finishes are tracked but don't affect season rankings
 - 💩 Last place
 - 👑 Season leader
 
-**Live results can change. Nothing is official until the games are final.**
+**Live results can change. Nothing is official until all scheduled games are final.**
