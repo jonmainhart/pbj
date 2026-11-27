@@ -147,7 +147,7 @@ resource "aws_iam_role_policy" "scheduler" {
 resource "aws_scheduler_schedule" "create_week" {
   name                         = "pbj-create-week"
   state                        = "ENABLED"
-  schedule_expression          = "rate(1 minute)"
+  schedule_expression          = "cron(0 8 ? * TUE *)"
   schedule_expression_timezone = "America/New_York"
   flexible_time_window { mode = "OFF" }
   target {
@@ -169,7 +169,7 @@ resource "aws_scheduler_schedule" "create_week" {
 resource "aws_scheduler_schedule" "poll_games" {
   name                         = "pbj-poll-games"
   state                        = "ENABLED"
-  schedule_expression          = "cron(2/5 * * * ? *)"
+  schedule_expression          = "rate(1 minute)"
   schedule_expression_timezone = "America/New_York"
   flexible_time_window { mode = "OFF" }
   target {
